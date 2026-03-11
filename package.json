@@ -1,6 +1,10 @@
 {
-  "name": "admin",
-  "version": "0.1.0",
+  "name": "crush-suite-admin",
+  "version": "1.0.0",
+  "author": {
+    "name": "Will Christenson",
+    "email": "william.christenson@gmail.com"
+  },
   "private": true,
   "scripts": {
     "dev": "next dev",
