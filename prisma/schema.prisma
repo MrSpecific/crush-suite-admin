@@ -1,0 +1,540 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Merchant {
+  id                           Int                           @id @default(autoincrement())
+  createdAt                    DateTime                      @default(now())
+  updatedAt                    DateTime                      @updatedAt
+  uninstalledAt                DateTime?
+  syncedAt                     DateTime?
+  platform                     String                        @default("shopify")
+  shop                         String                        @unique
+  accessToken                  String?
+  status                       Status
+  billingPlanId                Int?
+  subscriptionDiscountId       Int?
+  platformBillingId            String?
+  platformBillingStatus        String?
+  compliancePartner            CompliancePartner             @default(VINOSHIPPER)
+  compliancePartnerId          String?
+  compliancePartnerAccountName String?
+  compliancePartnerApiPub      String?
+  compliancePartnerApiSec      String?
+  compliancePartnerConnection  CompliancePartnerConnection?
+  onboardedSteps               String[]                      @default([])
+  onboardedAt                  DateTime?
+  productsSyncedAt             DateTime?
+  productsSyncLockId           String? // parsed from job id. created at the beginning of the job, removed at the end. used to prevent concurrency of a job
+  productsSyncForceUpdate      Boolean                       @default(false)
+  merchantSyncForceUpdate      Boolean                       @default(false)
+  orderSyncBlock               Boolean                       @default(false)
+  headlessShopifyEnabled       Boolean                       @default(false) // if the merchant is using headless shopify
+  customersSyncedAt            DateTime?
+  websitePreferences           Json?
+  deliveryOptions              Json?
+  salesUSAStates               Json?
+  minimumOrderQuantity         Int                           @default(1) // eq to 750ml bottle
+  maximumOrderQuantity         Int?
+  enabledShippingClasses       Json?
+  inStorePickupRateCode        String? // the rate code for the UPS Store Pickup
+  fulfillmentPartner           FulfillmentPartner            @default(VINOSHIPPER)
+  platformCarrierServiceId     String?
+  platformCarrierServiceName   String?
+  platformShippingProfileId    String? // the primary shipping profile for alcohol products
+  platformShippingProfileIds   String[]                      @default([]) // all shipping profile ids
+  // below are generally analytics data, don't rely on them for business logic
+  platformEmail                String?
+  platformPlanName             String?
+  platformShopName             String? // without the .myshopify.com
+  platformTimezone             String?
+  platformZipCode              String?
+  platformStateCode            String?
+  platformPhone                String?
+  platformCity                 String?
+  //
+  platformTaxCollectionId      String? // the collection ID used for tax collection on alcohol products
+  products                     Product[]
+  customers                    Customer[]
+  billingPlan                  BillingPlan?                  @relation(fields: [billingPlanId], references: [id])
+  subscriptionDiscount         SubscriptionDiscount?         @relation(fields: [subscriptionDiscountId], references: [id])
+  orders                       Order[]
+  ComplianceProduct            ComplianceProduct[]
+  appIssues                    AppIssue[]
+  PrecomplianceEvent           PrecomplianceEvent[]
+  ComplianceCheckedCustomer    ComplianceCheckedCustomer[]
+  ApiAccess                    ApiAccess[]
+  MerchantShippingProfile      MerchantShippingStateConfig[]
+  MerchantBulkOperation        MerchantBulkOperation[]
+  GDPR                         GDPR[]
+
+  @@index([shop])
+}
+
+model Product {
+  id                         Int               @id @default(autoincrement())
+  createdAt                  DateTime          @default(now())
+  updatedAt                  DateTime          @default(now())
+  name                       String
+  platform                   String            @default("shopify")
+  shop                       String
+  compliancePartner          CompliancePartner @default(VINOSHIPPER)
+  compliancePartnerId        String?
+  compliancePartnerProductId String?
+  alcohol                    Boolean
+  abv                        String?
+  volume                     String?
+  volumeUnits                String            @default("ml")
+  minOrder                   Int               @default(1)
+  maxOrder                   Int               @default(0) // 0 means no limit
+  moqUnits                   Float             @default(1) // For the min order quantity on a total purchase level - this is a multiplier
+  excludeFromMinOrderQty     Boolean           @default(false) // Some products, like merchandise, can be excluded in the min order qty
+  vintage                    String?
+  varietal                   String?
+  type                       String?
+  published                  Boolean           @default(true)
+  clubMemberOnly             Boolean           @default(false)
+  platformProductId          String?
+  platformVariantId          String?
+  productVariantAllOptions   Json?
+  productVariantOptions      Json?
+  hasOptions                 Boolean           @default(false)
+  syncedAt                   DateTime?
+  productCategory            ProductCategory
+  alcoholData                Json?
+  noSaleStatesData           Json?
+  priceData                  Json?
+  inventory                  Int               @default(0)
+  price                      Float             @default(0)
+  sku                        String            @default("")
+  weight                     Float             @default(0)
+  weightUnit                 WeightUnit        @default(lb)
+  archived                   Boolean           @default(false)
+  multipack                  Boolean           @default(false)
+  imageUrl                   String?
+  handle                     String? // used for the product URL, eg /products/1
+  descriptionText            String? // product description, just the text, no HTML
+  merchantId                 Int
+  merchant                   Merchant          @relation(fields: [merchantId], references: [id])
+
+  @@unique([compliancePartnerProductId, compliancePartner, shop])
+  @@unique([shop, platformProductId, platformVariantId])
+  @@index([merchantId])
+}
+
+enum WeightUnit {
+  lb
+  oz
+  kg
+  g
+}
+
+model BillingPlan {
+  id               Int         @id @default(autoincrement())
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @default(now())
+  platform         String      @default("shopify")
+  name             String
+  description      String?
+  trialDays        Int         @default(0)
+  notes            String?
+  type             BillingType
+  price            Int         @default(0) // base price
+  perUsePrice      Float       @default(0) // eg revenue sharing
+  perUseThreshold  Float       @default(0) // eg revenue sharing when threshod has been met
+  perUseCap        Int         @default(0) // eg revenue sharing capped amount
+  perUseUnits      PerUseUnits @default(percent)
+  perUseTerms      String      @default("X % per month over Y USD. Capped at Z USD")
+  perUseType       PerUseType  @default(transaction)
+  accessibleStores String[]    @default([]) // if shopname with myshopify is present, only those shops will be eligible for this plan
+  merchants        Merchant[]
+}
+
+enum PerUseType {
+  transaction
+}
+
+enum PerUseUnits {
+  percent
+  fixed
+}
+
+// mostly aligned with Shopify. Each store can have a customer with a unique email
+// 2 stores can have the same customer email
+model Customer {
+  id                          Int               @id @default(autoincrement())
+  createdAt                   DateTime          @default(now())
+  updatedAt                   DateTime          @updatedAt
+  syncedAt                    DateTime?
+  platform                    String            @default("shopify")
+  platformCustomerId          String
+  shop                        String
+  compliancePartner           CompliancePartner @default(VINOSHIPPER)
+  compliancePartnerId         String?
+  compliancePartnerCustomerId String?
+  merchantId                  Int
+  dob                         DateTime?
+  email                       String
+  phoneNumber                 String?
+  usesPhoneNumberAsPrimary    Boolean           @default(false)
+  compliancePartnerEmail      String?
+  firstName                   String?
+  lastName                    String?
+  memberships                 Json?
+  isClubMember                Boolean           @default(false)
+  merchant                    Merchant          @relation(fields: [merchantId], references: [id])
+  orders                      Order[]
+
+  @@unique([email, shop])
+  @@index([shop])
+  @@index([platformCustomerId, platform])
+}
+
+model Order {
+  id                       Int               @id @default(autoincrement())
+  createdAt                DateTime          @default(now())
+  updatedAt                DateTime          @updatedAt
+  compliancePartner        CompliancePartner
+  compliancePartnerOrderId String?
+  platform                 String            @default("shopify")
+  platformOrderId          String?
+  platformOrderName        String?
+  createdWith              OrderCreatedWith
+  status                   OrderStatus
+  issues                   String[]          @default([]) // once these are added to an order never wipe them if order status changes - this is for record keeping
+  totalValue               Float             @default(0)
+  totalTax                 Float             @default(0)
+  totalShipping            Float             @default(0)
+  totalDiscounts           Float             @default(0)
+  totalComplianceFees      Float             @default(0)
+  quantityItems            Int               @default(0)
+  purchasedItems           Json              @default("[]")
+  shippingAddress          Json?
+  billingAddress           Json?
+  upsPickupId              String? // the UPS Store Pickup ID if applicable
+  phone                    String?
+  customerFirstName        String? // could be different for different orders
+  customerLastName         String? // could be different for different orders
+  customerEmail            String?
+  shippingMethod           String?
+  shippingZip              String?
+  shippingState            String? // 2 letter state code
+  transactionMonth         String? // digit month as string, eg 0 is Jan, 6 or 11 is Dec
+  transactionYear          String? // 4 digit year as string
+  platformProductIds       String[]          @default([])
+  updatedCount             Int               @default(0)
+  customerId               Int
+  customer                 Customer          @relation(fields: [customerId], references: [id])
+  merchantId               Int
+  merchant                 Merchant          @relation(fields: [merchantId], references: [id])
+  Fulfillment              Fulfillment[]
+}
+
+model Fulfillment {
+  id                    Int               @id @default(autoincrement())
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+  platform              String            @default("shopify")
+  platformFulfillmentId String?
+  platformOrderId       String
+  status                FulfillmentStatus
+  fulfillmentProgress   Json?
+  shop                  String
+  orderId               Int
+  order                 Order             @relation(fields: [orderId], references: [id])
+}
+
+enum FulfillmentStatus {
+  SHIPPING_LABELS_GENERATED
+  SHIPPED
+  DELIVERED
+  PICKED_UP
+  CANCELLED
+  RETURNED
+  ERROR
+}
+
+model SubscriptionDiscount {
+  id                Int          @id @default(autoincrement())
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @default(now())
+  platform          String       @default("shopify")
+  description       String
+  value             String
+  discountFixed     Float
+  discountPercent   Float
+  discountType      DiscountType @default(recurring)
+  uses              Int          @default(1)
+  durationIntervals Int
+  applicablePlanIds Int[]        @default([]) // optional and we don't actually utilize a fk on the plan table
+  applicableApps    AppName[]    @default([])
+  merchants         Merchant[]
+}
+
+enum AppName {
+  SOMMELIER_AI
+  COMPLIANCE
+  WINE_CLUB
+}
+
+model ComplianceProduct {
+  id                  Int               @id @default(autoincrement())
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  platform            String            @default("shopify")
+  shop                String
+  compliancePartner   CompliancePartner @default(VINOSHIPPER)
+  compliancePartnerId String?
+  stateUSA            String // which state does this product represent
+  published           Boolean           @default(true)
+  platformProductId   String
+  platformVariantId   String
+  price               Float             @default(0)
+  priceUnits          String            @default("dollars/750ml")
+  pricePerGallon      Float             @default(0) // used for display purposes - this gets rounded and converted to fee per 750ml. Thus a change if 0.01 /gallon might not be reflected in the fee per 750ml
+  enabled             Boolean           @default(true)
+  licensed            Boolean           @default(false) // refers to if the merchant is licensed to ship this product to this state
+  name                String
+  imageUrl            String?
+  merchantId          Int
+  merchant            Merchant          @relation(fields: [merchantId], references: [id])
+
+  @@unique([shop, platformProductId, platformVariantId])
+  @@index([merchantId])
+}
+
+// This is a config for the merchant to set the shipping state config
+// Merchants can turn shipping off to different states as needed, for example, due to weather
+// They can add a message to the customer if they want that will appear on the frontend
+model MerchantShippingStateConfig {
+  id             String    @id @default(cuid())
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  platform       String    @default("shopify")
+  shop           String
+  stateUSA       String // which state does this represent
+  enabled        Boolean   @default(true)
+  disabledFrom   DateTime?
+  disabledTo     DateTime?
+  displayMessage Boolean   @default(false)
+  message        String?
+  merchantId     Int
+  merchant       Merchant  @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  @@unique([shop, stateUSA])
+  @@index([shop])
+}
+
+model MerchantBulkOperation {
+  id          String            @id @default(cuid())
+  createdAt   DateTime          @default(now())
+  completedAt DateTime? // shopify value, update when the job is completed
+  startedAt   DateTime? // update when the job started
+  processedAt DateTime? // when the job utilizing this has fully completed
+  updatedAt   DateTime          @updatedAt
+  merchantId  Int
+  merchant    Merchant          @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  type        BulkOperationType
+  shop        String
+  platformId  String // shopify bulk id
+
+  @@unique([shop, platformId])
+}
+
+enum BulkOperationType {
+  PRODUCT
+}
+
+model AdminUser {
+  id         String        @id @default(cuid())
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+  lastLogin  DateTime?
+  email      String        @unique
+  givenName  String
+  familyName String
+  password   String
+  role       Role          @default(USER)
+  actions    AdminAction[]
+}
+
+enum Role {
+  VIEWER
+  USER
+  ADMIN
+  SUPERADMIN
+  DISABLED
+}
+
+model AdminAction {
+  id          String    @id @default(cuid())
+  timestamp   DateTime  @default(now())
+  user        AdminUser @relation(fields: [userId], references: [id])
+  userId      String
+  description String
+  data        Json?
+  notes       String?
+}
+
+model AppIssue {
+  id         String       @id @default(cuid())
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+  platform   String       @default("shopify")
+  shop       String
+  issueType  AppIssueType
+  issueData  Json
+  resolved   Boolean      @default(false)
+  resolvedAt DateTime?
+  merchantId Int
+  merchant   Merchant     @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+}
+
+enum AppIssueType {
+  PRODUCTS
+  CUSTOMERS
+  ORDERS
+  COMPLIANCE_PRODUCTS
+}
+
+model PrecomplianceEvent {
+  id            String                 @id @default(cuid())
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
+  platform      String                 @default("shopify")
+  shop          String
+  sessionId     String // created by the frontend, should be generally uniq but not guaranteed
+  eventType     PrecomplianceEventType
+  failedReason  String?
+  failedPayload Json?
+  failedUser    Json?
+  merchantId    Int
+  merchant      Merchant               @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  @@index([shop, createdAt, sessionId])
+}
+
+model ComplianceCheckedCustomer {
+  id         String   @id @default(cuid())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  key        String
+  customer   Json
+  merchantId Int
+  merchant   Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  @@unique([key, merchantId])
+}
+
+model ApiAccess {
+  id         String   @id @default(cuid())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  privateKey String
+  sandboxKey String?  @unique
+  limit      Int      @default(60) // 60 requests per minute
+  scopes     String[] @default([]) // eg read:products, write:products etc
+  merchantId Int
+  merchant   Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  @@unique([privateKey, merchantId])
+}
+
+model GDPR {
+  id                 String    @id @default(cuid())
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  platform           String    @default("shopify")
+  shop               String
+  merchantId         Int
+  platformCustomerId String?
+  customerId         Int?
+  completedAt        DateTime?
+  completed          Boolean   @default(false)
+  type               String // customer redact, customer data request etc
+  instructions       String?
+  merchant           Merchant  @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+}
+
+enum PrecomplianceEventType {
+  INITIATED
+  SUBMITTED
+  APPROVED
+  FAILED
+}
+
+enum OrderCreatedWith {
+  SHOPIFY
+  VINOSHIPPER
+}
+
+enum OrderStatus {
+  OPEN
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+  COMPLETED
+  NONCOMPLIANT
+  ERROR
+  USER_OVERRIDE // manual override - eg if the order is noncompliant but the merchant is handling this manually now
+}
+
+enum Status {
+  INSTALLED
+  READY
+  REMOVED
+  ERROR
+}
+
+enum CompliancePartnerConnection {
+  ACTIVE
+  ERROR
+}
+
+enum CompliancePartner {
+  SELF
+  VINOSHIPPER
+  UNKNOWN // for use when a merchant may be using a different app than the main compliance app
+}
+
+enum FulfillmentPartner {
+  SELF
+  VINOSHIPPER
+}
+
+enum ProductCategory {
+  wine
+  liquor
+  liqueur
+  beer
+  merchandise
+  other_alcohol
+  other_any
+  multi_pack
+  cider
+  sake
+  mead
+  canned_cocktail
+  non_alcoholic_beverage
+  flavored_alcohol // eg seltzer, malt beverage
+}
+
+enum BillingType {
+  monthly
+  percentage
+  oneTime
+}
+
+enum DiscountType {
+  oneTime
+  recurring
+}

@@ -12,15 +12,13 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "prisma-cli:update:dev": "prisma generate --schema=../prisma/schema.prisma",
-    "prisma:migrate": "npx prisma migrate dev --schema=../prisma/schema.prisma",
-    "prisma:generate": "npx prisma generate",
-    "prisma:studio": "npx prisma studio --schema=../prisma/schema.prisma",
+    "prisma:generate": "prisma generate",
+    "prisma:studio": "prisma studio",
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
     "@next/third-parties": "^14.2.3",
-    "@prisma/client": "file:../node_modules/@prisma/client",
+    "@prisma/client": "^4.16.2",
     "@radix-ui/react-form": "^0.0.3",
     "@radix-ui/react-icons": "^1.3.0",
     "@radix-ui/react-navigation-menu": "^1.1.4",
@@ -48,6 +46,6 @@
     "typescript": "^5"
   },
   "prisma": {
-    "schema": "../prisma/schema.prisma"
+    "schema": "./prisma/schema.prisma"
   }
 }
