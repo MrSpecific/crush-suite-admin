@@ -1,8 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
-import { AdminUser } from '@prisma/client';
-import NextLink from 'next/link';
 import {
   Badge,
   Box,
@@ -61,7 +59,12 @@ export const Sidebar = ({ user }: { user?: SessionUser }) => {
           <VisuallyHidden>Crush Suite Admin</VisuallyHidden>
         </Heading>
         <Grid columns="1" gap="2" my="2">
-          <NavItem href="/merchants">Merchants</NavItem>
+          <Flex align="center" justify="between" gap="2">
+            <NavItem href="/merchants" style={{ flexGrow: '2' }}>
+              Merchants
+            </NavItem>
+            <MerchantsDropdown />
+          </Flex>
           <NavItem href="/products">Products</NavItem>
           <NavItem href="/customers">Customers</NavItem>
           <NavItem href="/orders">Orders</NavItem>
@@ -84,9 +87,40 @@ export const Sidebar = ({ user }: { user?: SessionUser }) => {
   );
 };
 
-const UsersDropdown = () => {
+const MerchantsDropdown = () => {
+  const [open, setOpen] = useState(false);
+
   return (
-    <DropdownMenu.Root>
+    <DropdownMenu.Root open={open} onOpenChange={setOpen}>
+      <DropdownMenu.Trigger>
+        <Button variant="soft" color="gray">
+          <DropdownMenu.TriggerIcon />
+        </Button>
+      </DropdownMenu.Trigger>
+
+      <DropdownMenu.Content>
+        <DropdownMenu.Item asChild onSelect={() => setOpen(false)}>
+          <Link href="/merchants">All</Link>
+        </DropdownMenu.Item>
+        <DropdownMenu.Item asChild onSelect={() => setOpen(false)}>
+          <Link href="/merchants?status=READY">Active</Link>
+        </DropdownMenu.Item>
+        <DropdownMenu.Item asChild onSelect={() => setOpen(false)}>
+          <Link href="/merchants?status=INSTALLED">Installed</Link>
+        </DropdownMenu.Item>
+        <DropdownMenu.Item asChild onSelect={() => setOpen(false)}>
+          <Link href="/merchants?status=REMOVED">Removed</Link>
+        </DropdownMenu.Item>
+      </DropdownMenu.Content>
+    </DropdownMenu.Root>
+  );
+};
+
+const UsersDropdown = () => {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <DropdownMenu.Root open={open} onOpenChange={setOpen}>
       <DropdownMenu.Trigger>
         <Button variant="soft" color="gray">
           <DropdownMenu.TriggerIcon />
@@ -95,7 +129,7 @@ const UsersDropdown = () => {
 
       <DropdownMenu.Content>
         {/* <DropdownMenu.Item shortcut="⌘ N" asChild> */}
-        <DropdownMenu.Item asChild>
+        <DropdownMenu.Item asChild onSelect={() => setOpen(false)}>
           <Link href="/users/new">New</Link>
         </DropdownMenu.Item>
         {/* <DropdownMenu.Item shortcut="⌘ D">Duplicate</DropdownMenu.Item>

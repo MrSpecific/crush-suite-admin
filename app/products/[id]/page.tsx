@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/prisma';
-import { Box, Card, Flex, Grid, Heading, ScrollArea, Text } from '@radix-ui/themes';
+import { Badge, Box, Card, Flex, Grid, Heading, ScrollArea, Text } from '@radix-ui/themes';
 import { Link } from '@/app/components/Link';
 import { NotFound } from '@/app/components/NotFound';
 import { PageLayout } from '@/app/components/PageLayout';
@@ -216,7 +216,7 @@ export default async function Page({ params }: { params: { id: string } }) {
       </Grid>
 
       <Grid columns={{ initial: '1', md: '2' }} gap="4" mt="4">
-        <JsonCard title="Variant Options" data={data.productVariantOptions} />
+        <VariantOptionsCard title="Variant Options" data={data.productVariantOptions} />
         <JsonCard title="All Variant Options" data={data.productVariantAllOptions} />
         <JsonCard title="Alcohol Data" data={data.alcoholData} />
         <JsonCard title="No-Sale States Data" data={data.noSaleStatesData} />
@@ -225,6 +225,165 @@ export default async function Page({ params }: { params: { id: string } }) {
     </PageLayout>
   );
 }
+
+const VariantOptionsCard = ({ title, data }: { title: string; data: unknown }) => {
+  const options = normalizeVariantOptions(data);
+
+  if (!options.length) {
+    return <JsonCard title={title} data={data} />;
+  }
+
+  return (
+    <Card>
+      <Heading as="h2" size="3" mb="3">
+        {title}
+      </Heading>
+      <Flex direction="column" gap="3">
+        {options.map((option, index) => (
+          <Box
+            key={`${option.label}-${index}`}
+            p="3"
+            style={{
+              backgroundColor: 'var(--gray-2)',
+              borderRadius: 'var(--radius-3)',
+            }}
+          >
+            <Text as="div" size="1" color="gray" mb="1">
+              {option.label}
+            </Text>
+            {option.values?.length ? (
+              <Flex wrap="wrap" gap="2">
+                {option.values.map((value) => (
+                  <Badge key={value} variant="soft">
+                    {value}
+                  </Badge>
+                ))}
+              </Flex>
+            ) : (
+              <Text>{option.value}</Text>
+            )}
+          </Box>
+        ))}
+      </Flex>
+    </Card>
+  );
+};
+
+const normalizeVariantOptions = (
+  data: unknown
+): { label: string; value?: string; values?: string[] }[] => {
+  if (!data) return [];
+
+  if (Array.isArray(data)) {
+    return data
+      .map((item, index) => normalizeVariantOptionItem(item, index))
+      .filter(Boolean) as { label: string; value?: string; values?: string[] }[];
+  }
+
+  if (typeof data === 'object') {
+    return Object.entries(data as Record<string, unknown>)
+      .map(([key, value]) => normalizeKeyValueOption(key, value))
+      .filter(Boolean) as { label: string; value?: string; values?: string[] }[];
+  }
+
+  return [];
+};
+
+const normalizeVariantOptionItem = (item: unknown, index: number) => {
+  if (item == null) return null;
+
+  if (typeof item !== 'object') {
+    return {
+      label: `Option ${index + 1}`,
+      value: formatVariantValue(item),
+    };
+  }
+
+  const record = item as Record<string, unknown>;
+  const label = firstString(record, ['name', 'label', 'title', 'option']) || `Option ${index + 1}`;
+
+  const directValues = firstArray(record, ['values', 'optionValues', 'choices']);
+  if (directValues.length) {
+    return {
+      label,
+      values: directValues.map(formatVariantValue).filter(Boolean),
+    };
+  }
+
+  const directValue = firstValue(record, ['value', 'selectedValue', 'selected']);
+  if (directValue !== undefined) {
+    return {
+      label,
+      value: formatVariantValue(directValue),
+    };
+  }
+
+  const remainingEntries = Object.entries(record).filter(
+    ([key]) => !['name', 'label', 'title', 'option'].includes(key)
+  );
+
+  if (remainingEntries.length === 1) {
+    return normalizeKeyValueOption(label, remainingEntries[0][1]);
+  }
+
+  if (remainingEntries.length > 1) {
+    return {
+      label,
+      value: JSON.stringify(Object.fromEntries(remainingEntries), null, 2),
+    };
+  }
+
+  return null;
+};
+
+const normalizeKeyValueOption = (key: string, value: unknown) => {
+  if (value == null) return null;
+
+  if (Array.isArray(value)) {
+    return {
+      label: humanizeOptionLabel(key),
+      values: value.map(formatVariantValue).filter(Boolean),
+    };
+  }
+
+  return {
+    label: humanizeOptionLabel(key),
+    value: formatVariantValue(value),
+  };
+};
+
+const firstString = (record: Record<string, unknown>, keys: string[]) => {
+  const value = firstValue(record, keys);
+  return typeof value === 'string' ? value : undefined;
+};
+
+const firstArray = (record: Record<string, unknown>, keys: string[]) => {
+  const value = firstValue(record, keys);
+  return Array.isArray(value) ? value : [];
+};
+
+const firstValue = (record: Record<string, unknown>, keys: string[]) => {
+  for (const key of keys) {
+    if (key in record) {
+      return record[key];
+    }
+  }
+
+  return undefined;
+};
+
+const humanizeOptionLabel = (value: string) =>
+  value
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/[_-]+/g, ' ')
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+
+const formatVariantValue = (value: unknown) => {
+  if (value == null) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  return JSON.stringify(value);
+};
 
 const JsonCard = ({ title, data }: { title: string; data: unknown }) => {
   return (

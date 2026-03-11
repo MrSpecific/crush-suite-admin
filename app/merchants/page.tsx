@@ -1,3 +1,4 @@
+import { Prisma, Status } from '@prisma/client';
 import { prisma, QueryMode } from '@/lib/prisma';
 import { PageLayout } from '@/app/components/PageLayout';
 import { DataTable } from '@/app/components/DataTable';
@@ -22,11 +23,17 @@ const Actions = ({ ...props }) => {
 };
 
 export default async function Page({ searchParams }: { searchParams: PageSearchParams }) {
-  const { page, search } = searchParams;
+  const { page, search, status } = searchParams;
   const searchString = search?.toString();
-  const where = search
+  const statusFilter = normalizeMerchantStatus(status);
+  const where: Prisma.MerchantWhereInput | undefined = search || statusFilter
     ? {
-        OR: [{ shop: { contains: searchString, mode: QueryMode.insensitive } }],
+        ...(search
+          ? {
+              OR: [{ shop: { contains: searchString, mode: QueryMode.insensitive } }],
+            }
+          : {}),
+        ...(statusFilter ? { status: statusFilter } : {}),
       }
     : undefined;
   const count = await prisma.merchant.count({ where });
@@ -56,10 +63,32 @@ export default async function Page({ searchParams }: { searchParams: PageSearchP
   ];
 
   return (
-    <PageLayout heading="Merchants">
+    <PageLayout heading={getMerchantPageHeading(statusFilter)}>
       <DataFilter />
       <DataTable headers={headers} data={merchants} Actions={Actions} />
       <Pagination count={count} />
     </PageLayout>
   );
 }
+
+const getMerchantPageHeading = (status?: Status) => {
+  if (!status) return 'Merchants';
+
+  const headings: Partial<Record<Status, string>> = {
+    READY: 'Active Merchants',
+    INSTALLED: 'Installed Merchants',
+    REMOVED: 'Removed Merchants',
+  };
+
+  return headings[status] || 'Merchants';
+};
+
+const normalizeMerchantStatus = (status?: string | string[]) => {
+  const value = Array.isArray(status) ? status[0] : status;
+
+  if (!value) return undefined;
+
+  const validStatuses: Status[] = ['READY', 'INSTALLED', 'REMOVED'];
+
+  return validStatuses.includes(value as Status) ? (value as Status) : undefined;
+};
