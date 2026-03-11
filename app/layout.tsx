@@ -28,7 +28,7 @@ export default async function RootLayout({
   }
 
   return (
-    <AuthContext>
+    <AuthContext session={session}>
       <html lang="en">
         <body className={inter.className}>
           <Theme accentColor="ruby" grayColor="mauve" radius="large">

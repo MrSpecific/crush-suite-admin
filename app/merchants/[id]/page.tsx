@@ -1,3 +1,4 @@
+import { Order } from '@prisma/client';
 import { prisma, QueryMode } from '@/lib/prisma';
 import { Box, Flex, Grid, Heading } from '@radix-ui/themes';
 import { Link } from '@/app/components/Link';
@@ -205,7 +206,7 @@ const MerchantOrders = ({
   merchantId,
   count,
 }: {
-  orders: any[];
+  orders: Order[];
   merchantId: string;
   count: number;
 }) => {

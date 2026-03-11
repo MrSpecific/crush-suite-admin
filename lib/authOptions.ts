@@ -1,6 +1,7 @@
 import { AuthOptions } from 'next-auth';
 import GoogleProvider from 'next-auth/providers/google';
 import CredentialsProvider from 'next-auth/providers/credentials';
+import { JWT } from 'next-auth/jwt';
 import { CrushSuiteAdminUser } from '@/types/next-auth';
 import { prisma } from '@/lib/prisma';
 
@@ -23,7 +24,35 @@ const findAdminUserByEmail = async (email: string) =>
     },
   });
 
+const userSyncMaxAgeMs = 60 * 1000;
+
+const syncTokenWithAdminUser = async (token: JWT, email: string): Promise<JWT> => {
+  const adminUser = await findAdminUserByEmail(email);
+
+  if (!adminUser) {
+    return {
+      ...token,
+      email,
+      role: 'DISABLED',
+      userSyncedAt: Date.now(),
+    };
+  }
+
+  return {
+    ...token,
+    id: adminUser.id,
+    email: adminUser.email,
+    givenName: adminUser.givenName,
+    familyName: adminUser.familyName,
+    role: adminUser.role,
+    userSyncedAt: Date.now(),
+  };
+};
+
 export const authOptions: AuthOptions = {
+  session: {
+    strategy: 'jwt',
+  },
   // Configure one or more authentication providers
   providers: [
     // GithubProvider({
@@ -125,30 +154,32 @@ export const authOptions: AuthOptions = {
 
       return baseUrl;
     },
-    async session({ session }) {
-      if (!session || !session.user || !session.user.email) return session;
+    async jwt({ token, user }) {
+      const email = user?.email || token.email;
 
-      const userData = await findAdminUserByEmail(session.user.email);
+      if (!email) return token;
 
-      if (!userData) {
-        session.user = {
-          ...session.user,
-          role: 'DISABLED',
-        };
-        return session;
+      const needsSync =
+        !!user ||
+        !token.userSyncedAt ||
+        Date.now() - Number(token.userSyncedAt) > userSyncMaxAgeMs;
+
+      if (!needsSync) {
+        return token;
       }
 
-      if (userData.role === 'DISABLED') {
-        session.user = {
-          ...session.user,
-          ...userData,
-        };
-        return session;
-      }
+      return await syncTokenWithAdminUser(token, email);
+    },
+    async session({ session, token }) {
+      if (!session || !session.user) return session;
 
       session.user = {
         ...session.user,
-        ...userData,
+        id: token.id,
+        email: token.email || session.user.email,
+        givenName: token.givenName,
+        familyName: token.familyName,
+        role: token.role,
       };
 
       return session;

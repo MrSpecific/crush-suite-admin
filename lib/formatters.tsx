@@ -1,6 +1,8 @@
 import { Link } from '@/app/components/Link';
-import { Box, Text, Button, Dialog, Flex, IconButton } from '@radix-ui/themes';
+import { Box, Text, Button, Dialog, Flex, IconButton, Badge } from '@radix-ui/themes';
 import { ExclamationTriangleIcon } from '@radix-ui/react-icons';
+import { orderStatusMetaData } from './metaData';
+import { RadixColor } from '@/types/radix-ui';
 
 export const dateFormatter = (value: Date) => (value ? value.toLocaleDateString() : '');
 
@@ -103,4 +105,15 @@ export const formatAsUrl = (input: string): string => {
 
   // If it looks like a domain (e.g., example.com), prefix with "//"
   return `//${url}`;
+};
+
+export const orderStatusFormatter = (value: string) => {
+  const status = orderStatusMetaData[value as keyof typeof orderStatusMetaData];
+  const color: RadixColor = status ? status.color : 'gray';
+
+  return (
+    <Badge color={color} variant="soft">
+      {status ? status.label : value}
+    </Badge>
+  );
 };

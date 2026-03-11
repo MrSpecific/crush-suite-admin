@@ -5,6 +5,7 @@ import {
   dateFormatter,
   issuesFormatter,
   merchantFormatter,
+  orderStatusFormatter,
 } from '@/lib/formatters';
 import { Box, Flex, Text } from '@radix-ui/themes';
 
@@ -37,7 +38,7 @@ export const getOrderTableHeaders = ({
       title: 'Order Ids',
       formatter: orderIdsFormatter,
     },
-    { id: 'status', title: 'Status' },
+    { id: 'status', title: 'Status', formatter: orderStatusFormatter },
     { id: 'issues', title: 'Issues', formatter: issuesFormatter }
   );
 
