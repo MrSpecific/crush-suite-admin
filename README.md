@@ -1,5 +1,27 @@
 This is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
 
+## Google OAuth
+
+This admin app supports both credentials login and Google OAuth through `next-auth`.
+Google sign-in is restricted to existing `AdminUser` records whose email matches the Google account email.
+
+Required env vars:
+
+```bash
+NEXTAUTH_URL=http://localhost:3006
+NEXTAUTH_SECRET=replace-me
+AUTH_TOKEN=replace-me
+GOOGLE_CLIENT_ID=replace-me
+GOOGLE_CLIENT_SECRET=replace-me
+```
+
+Google Cloud Console settings:
+
+- Authorized JavaScript origin: `http://localhost:3006`
+- Authorized redirect URI: `http://localhost:3006/api/auth/callback/google`
+
+In production, replace `http://localhost:3006` with the deployed admin app URL.
+
 ## Getting Started
 
 First, run the development server:

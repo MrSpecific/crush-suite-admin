@@ -24,9 +24,12 @@ export async function POST(req: NextRequest): Promise<NextResponse<any>> {
 
   // return NextResponse.json({ error: 'TODO: Auth not configured' }, { status: 500 });
 
-  const user = await prisma.adminUser.findUnique({
+  const user = await prisma.adminUser.findFirst({
     where: {
-      email: username,
+      email: {
+        equals: username,
+        mode: 'insensitive',
+      },
     },
     select: {
       id: true,
@@ -40,8 +43,6 @@ export async function POST(req: NextRequest): Promise<NextResponse<any>> {
     },
   });
 
-  console.log('user', user);
-
   if (!user || !user.password) {
     return NextResponse.json({ error: 'User not found' }, { status: 404 });
   }
@@ -50,7 +51,9 @@ export async function POST(req: NextRequest): Promise<NextResponse<any>> {
     return NextResponse.json({ error: 'Invalid password' }, { status: 401 });
   }
 
+  const { password: _password, ...safeUser } = user;
+
   return NextResponse.json({
-    user,
+    user: safeUser,
   });
 }

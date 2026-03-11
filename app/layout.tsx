@@ -23,7 +23,7 @@ export default async function RootLayout({
 }>) {
   const session = await serverSession();
 
-  if (!session?.user) {
+  if (!session?.user || session.user.role === 'DISABLED') {
     return <Unauthenticated />;
   }
 

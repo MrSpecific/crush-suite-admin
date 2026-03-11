@@ -26,6 +26,7 @@ export interface GoogleOrAzureProfile extends Profile {
 export interface CrushSuiteAdminUser extends Profile {
   given_name?: string;
   family_name?: string;
+  email_verified?: boolean;
   role?: string;
 }
 

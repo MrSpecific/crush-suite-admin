@@ -1,8 +1,27 @@
 import { AuthOptions } from 'next-auth';
-// import GoogleProvider from 'next-auth/providers/google';
+import GoogleProvider from 'next-auth/providers/google';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import { CrushSuiteAdminUser } from '@/types/next-auth';
 import { prisma } from '@/lib/prisma';
+
+const findAdminUserByEmail = async (email: string) =>
+  prisma.adminUser.findFirst({
+    where: {
+      email: {
+        equals: email,
+        mode: 'insensitive',
+      },
+    },
+    select: {
+      id: true,
+      email: true,
+      givenName: true,
+      familyName: true,
+      role: true,
+      createdAt: true,
+      updatedAt: true,
+    },
+  });
 
 export const authOptions: AuthOptions = {
   // Configure one or more authentication providers
@@ -12,10 +31,10 @@ export const authOptions: AuthOptions = {
     //   clientSecret: process.env.GITHUB_SECRET,
     // }),
     // ...add more providers here
-    // GoogleProvider({
-    //   clientId: process.env.GOOGLE_CLIENT_ID as string,
-    //   clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
-    // }),
+    GoogleProvider({
+      clientId: process.env.GOOGLE_CLIENT_ID as string,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
+    }),
     CredentialsProvider({
       // The name to display on the sign in form (e.g. 'Sign in with...')
       name: 'Credentials',
@@ -34,13 +53,9 @@ export const authOptions: AuthOptions = {
         // e.g. return { id: 1, name: 'J Smith', email: 'jsmith@example.com' }
         // You can also use the `req` object to obtain additional parameters
         // (i.e., the request IP address)
-        // console.log(req);
-        // const res = await fetch(`${process.env.NEXTAUTH_URL}/api/authenticate`, {
-        console.log('process.env.NEXTAUTH_URL', process.env.NEXTAUTH_URL);
         const res = await fetch(
           `${process.env.NEXTAUTH_URL || req.headers?.origin}/api/authenticate`,
           {
-            // const res = await fetch(`/api/authenticate`, {
             method: 'POST',
             body: JSON.stringify(credentials),
             headers: {
@@ -63,27 +78,42 @@ export const authOptions: AuthOptions = {
     }),
   ],
   callbacks: {
-    async signIn({ user, profile }) {
-      // store provider info in db
-      const { email } = user;
-      const { given_name = undefined, family_name = undefined } = profile
+    async signIn({ user, profile, account }) {
+      const userEmail = user.email;
+
+      if (!userEmail) {
+        console.error('No email found');
+        return false;
+      }
+
+      const adminUser = await findAdminUserByEmail(userEmail);
+
+      if (!adminUser || adminUser.role === 'DISABLED') {
+        return false;
+      }
+
+      const { given_name = undefined, family_name = undefined, email_verified = undefined } = profile
         ? (profile as CrushSuiteAdminUser)
         : ({} as CrushSuiteAdminUser);
-      const userEmail = email;
 
-      if (userEmail) {
-        await prisma.adminUser.update({
-          where: {
-            email: userEmail,
-          },
-          data: {
-            lastLogin: new Date(),
-          },
-        });
-      } else {
-        console.error('No email found');
-        throw new Error('No email found');
+      if (account?.provider === 'google' && email_verified === false) {
+        return false;
       }
+
+      await prisma.adminUser.update({
+        where: {
+          id: adminUser.id,
+        },
+        data: {
+          lastLogin: new Date(),
+          ...(account?.provider === 'google'
+            ? {
+                givenName: given_name || adminUser.givenName,
+                familyName: family_name || adminUser.familyName,
+              }
+            : {}),
+        },
+      });
 
       return true;
     },
@@ -95,25 +125,27 @@ export const authOptions: AuthOptions = {
 
       return baseUrl;
     },
-    async session({ session, user, token }) {
+    async session({ session }) {
       if (!session || !session.user || !session.user.email) return session;
 
-      const userData = await prisma.adminUser.findUnique({
-        where: {
-          email: session.user.email,
-        },
-        select: {
-          id: true,
-          email: true,
-          givenName: true,
-          familyName: true,
-          role: true,
-          createdAt: true,
-          updatedAt: true,
-        },
-      });
+      const userData = await findAdminUserByEmail(session.user.email);
 
-      // console.log('userData', userData);
+      if (!userData) {
+        session.user = {
+          ...session.user,
+          role: 'DISABLED',
+        };
+        return session;
+      }
+
+      if (userData.role === 'DISABLED') {
+        session.user = {
+          ...session.user,
+          ...userData,
+        };
+        return session;
+      }
+
       session.user = {
         ...session.user,
         ...userData,
@@ -122,6 +154,7 @@ export const authOptions: AuthOptions = {
       return session;
     },
   },
+  secret: process.env.NEXTAUTH_SECRET,
 };
 
 export default authOptions;
