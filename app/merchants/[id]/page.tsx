@@ -1,12 +1,10 @@
-// import { Proposal as ProposalType } from '@prisma/client';
 import { prisma, QueryMode } from '@/lib/prisma';
-import { Box, Flex, Grid, Heading, Text } from '@radix-ui/themes';
+import { Box, Flex, Grid, Heading } from '@radix-ui/themes';
 import { Link } from '@/app/components/Link';
 import { NotFound } from '@/app/components/NotFound';
 import { PageLayout } from '@/app/components/PageLayout';
 import { DataFilter } from '@/app/components/DataFilter';
 import { DataTable } from '@/app/components/DataTable';
-import { EditDialog } from '@/app/components/EditDialog';
 import { Pagination } from '@/app/components/Pagination';
 import { QuickDataList } from '@/app/components/QuickDataList';
 import { ComplianceMap, type StateRecord } from '@/app/components/ComplianceMap';
@@ -15,12 +13,13 @@ import {
   dateFormatter,
   dateTimeFormatter,
   currencyFormatter,
-  linkFormatter,
   noNullsFormatter,
 } from '@/lib/formatters';
 import { ButtonLink } from '@/app/components/ButtonLink';
+import { OrderTableActions, getOrderTableHeaders } from '@/app/orders/orderTable';
 
 const productsTake = 10;
+const ordersTake = 20;
 
 export default async function Page({
   params,
@@ -30,15 +29,16 @@ export default async function Page({
   searchParams: PageSearchParams;
 }) {
   const { id } = params;
+  const merchantId = parseInt(id);
   const { page, search } = searchParams;
   const searchString = search?.toString();
   const where = search
     ? {
         OR: [{ name: { contains: searchString, mode: QueryMode.insensitive } }],
-        AND: [{ merchantId: parseInt(id) }],
+        AND: [{ merchantId }],
       }
     : {
-        merchantId: parseInt(id),
+        merchantId,
       };
 
   const productCount = await prisma.product.count({ where });
@@ -64,14 +64,12 @@ export default async function Page({
     { id: 'createdAt', title: 'Created At', formatter: dateFormatter },
     { id: 'updatedAt', title: 'Updated At', formatter: dateFormatter },
     { id: 'syncedAt', title: 'Synced At', formatter: dateFormatter },
-    // { id: 'platform', title: 'Platform' },
     { id: 'compliancePartner', title: 'Compliance Partner' },
-    // { type: 'actions', title: 'Actions' },
   ];
 
   const events = await prisma.precomplianceEvent.findMany({
     where: {
-      merchantId: parseInt(id),
+      merchantId,
     },
     orderBy: {
       createdAt: 'desc',
@@ -79,9 +77,25 @@ export default async function Page({
     take: 10,
   });
 
+  const orderCount = await prisma.order.count({
+    where: {
+      merchantId,
+    },
+  });
+
+  const orders = await prisma.order.findMany({
+    where: {
+      merchantId,
+    },
+    orderBy: {
+      createdAt: 'desc',
+    },
+    take: ordersTake,
+  });
+
   const data = await prisma.merchant.findUnique({
     where: {
-      id: parseInt(id),
+      id: merchantId,
     },
     include: {
       billingPlan: true,
@@ -135,15 +149,13 @@ export default async function Page({
           <ComplianceMap states={stateList} />
         </Box>
       </Grid>
-      {/* <Flex align="start" justify="end" gap="2">
-        <Link href={`/merchants/${id}/edit`}>Edit</Link>
-      </Flex> */}
 
-      {/* {JSON.stringify(events)} */}
-      <MerchantEvents events={events} merchantId={id} />
+      <MerchantOrders orders={orders} merchantId={id} count={orderCount} />
 
       <Heading>Products for this merchant</Heading>
       <MerchantProducts products={products} headers={productHeaders} count={productCount} />
+
+      <MerchantEvents events={events} merchantId={id} />
     </PageLayout>
   );
 }
@@ -178,14 +190,37 @@ const MerchantEvents = ({ events, merchantId }: { events: any; merchantId: any }
           { type: 'data', title: 'Data' },
           { id: 'sessionId', title: 'Session ID' },
           { id: 'eventType', title: 'Type' },
-          // { id: 'shop', title: 'Shop' },
           { id: 'createdAt', title: 'Created At', formatter: dateTimeFormatter },
-          // { id: 'updatedAt', title: 'Updated At', formatter: dateFormatter },
           { id: 'failedReason', title: 'Failed Reason', formatter: noNullsFormatter },
         ]}
         data={events}
       />
       <ButtonLink href={`/merchants/${merchantId}/events`}>All Events</ButtonLink>
+    </Box>
+  );
+};
+
+const MerchantOrders = ({
+  orders,
+  merchantId,
+  count,
+}: {
+  orders: any[];
+  merchantId: string;
+  count: number;
+}) => {
+  return (
+    <Box my="4">
+      <Flex justify="between" gap="2">
+        <Heading mb="2">Recent Orders</Heading>
+        {count > ordersTake && <Link href={`/merchants/${merchantId}/orders`}>View More</Link>}
+      </Flex>
+      <DataTable
+        headers={getOrderTableHeaders({ includeMerchant: false })}
+        data={orders}
+        Actions={OrderTableActions}
+      />
+      {count > ordersTake && <Link href={`/merchants/${merchantId}/orders`}>View More</Link>}
     </Box>
   );
 };
