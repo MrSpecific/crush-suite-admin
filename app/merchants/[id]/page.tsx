@@ -1,6 +1,6 @@
 import { Order } from '@prisma/client';
 import { prisma, QueryMode } from '@/lib/prisma';
-import { Box, Flex, Grid, Heading } from '@radix-ui/themes';
+import { Box, Card, Flex, Grid, Heading, Text } from '@radix-ui/themes';
 import { Link } from '@/app/components/Link';
 import { NotFound } from '@/app/components/NotFound';
 import { PageLayout } from '@/app/components/PageLayout';
@@ -14,7 +14,9 @@ import {
   dateFormatter,
   dateTimeFormatter,
   currencyFormatter,
+  currencyFormatterWithDecimals,
   noNullsFormatter,
+  percentFormatter,
 } from '@/lib/formatters';
 import { ButtonLink } from '@/app/components/ButtonLink';
 import { OrderTableActions, getOrderTableHeaders } from '@/app/orders/orderTable';
@@ -94,6 +96,30 @@ export default async function Page({
     take: ordersTake,
   });
 
+  const currentDate = new Date();
+  const currentMonth = currentDate.getMonth().toString();
+  const currentYear = currentDate.getFullYear().toString();
+  const billingMonthLabel = new Intl.DateTimeFormat('en-US', {
+    month: 'long',
+    year: 'numeric',
+  }).format(currentDate);
+
+  const monthlyBillingOrders = await prisma.order.findMany({
+    where: {
+      merchantId,
+      transactionMonth: currentMonth,
+      transactionYear: currentYear,
+    },
+    orderBy: {
+      createdAt: 'asc',
+    },
+    select: {
+      id: true,
+      totalValue: true,
+      createdAt: true,
+    },
+  });
+
   const data = await prisma.merchant.findUnique({
     where: {
       id: merchantId,
@@ -117,6 +143,10 @@ export default async function Page({
     platformEmail,
   } = data;
   const stateList = salesUSAStates ? (salesUSAStates as StateRecord[]).map((s) => s.name) : [];
+  const billingSummary = getMerchantBillingSummary({
+    billingPlan,
+    orders: monthlyBillingOrders,
+  });
 
   return (
     <PageLayout heading={compliancePartnerAccountName ?? shop}>
@@ -151,6 +181,13 @@ export default async function Page({
         </Box>
       </Grid>
 
+      <MerchantBillingSnapshot
+        billingMonthLabel={billingMonthLabel}
+        billingSummary={billingSummary}
+        platformBillingId={data.platformBillingId}
+        platformBillingStatus={data.platformBillingStatus}
+      />
+
       <MerchantOrders orders={orders} merchantId={id} count={orderCount} />
 
       <Heading>Products for this merchant</Heading>
@@ -177,6 +214,137 @@ const MerchantProducts = ({
       <Pagination take={productsTake} count={count} />
     </Box>
   );
+};
+
+const MerchantBillingSnapshot = ({
+  billingMonthLabel,
+  billingSummary,
+  platformBillingId,
+  platformBillingStatus,
+}: {
+  billingMonthLabel: string;
+  billingSummary: ReturnType<typeof getMerchantBillingSummary>;
+  platformBillingId?: string | null;
+  platformBillingStatus?: string | null;
+}) => {
+  return (
+    <Card my="4">
+      <Heading mb="2">Billing Snapshot</Heading>
+      {billingSummary ? (
+        <>
+          <QuickDataList
+            data={[
+              { label: 'Billing Plan', value: billingSummary.planName },
+              {
+                label: 'Recurring Plan Cost',
+                value: currencyFormatterWithDecimals(billingSummary.planPrice),
+              },
+              {
+                label: 'Usage Rate',
+                value:
+                  billingSummary.perUseUnits === 'percent'
+                    ? percentFormatter(billingSummary.perUsePrice)
+                    : currencyFormatterWithDecimals(billingSummary.perUsePrice),
+              },
+              {
+                label: 'Usage Threshold',
+                value: currencyFormatterWithDecimals(billingSummary.perUseThreshold),
+              },
+              {
+                label: 'Usage Cap',
+                value: currencyFormatterWithDecimals(billingSummary.perUseCap),
+              },
+              { label: 'Usage Terms', value: billingSummary.perUseTerms },
+              {
+                label: `${billingMonthLabel} Revenue`,
+                value: currencyFormatterWithDecimals(billingSummary.totalMonthlyRevenue),
+              },
+              {
+                label: `${billingMonthLabel} Chargeable Orders`,
+                value: billingSummary.chargeableOrderCount.toString(),
+              },
+              {
+                label: `${billingMonthLabel} Estimated Usage Charges`,
+                value: currencyFormatterWithDecimals(billingSummary.estimatedUsageCharge),
+                tooltip: 'Estimated from order totals using current billing plan rules. Historical Shopify charge records are not stored in this admin database.',
+              },
+              {
+                label: `${billingMonthLabel} Estimated Total Charges`,
+                value: currencyFormatterWithDecimals(
+                  billingSummary.planPrice + billingSummary.estimatedUsageCharge
+                ),
+                tooltip: 'Recurring plan price plus estimated current-month usage charges.',
+              },
+              { label: 'Platform Billing Status', value: platformBillingStatus, badge: true },
+              { label: 'Platform Billing ID', value: platformBillingId, clipboard: true },
+            ]}
+          />
+          <Text as="p" size="1" color="gray" mt="3">
+            Usage charges are estimated from local order data using the same threshold logic as the
+            worker. Actual historical charge events are not persisted in this admin database.
+          </Text>
+        </>
+      ) : (
+        <Text color="gray">No billing plan is assigned to this merchant.</Text>
+      )}
+    </Card>
+  );
+};
+
+const getMerchantBillingSummary = ({
+  billingPlan,
+  orders,
+}: {
+  billingPlan?: {
+    name: string;
+    price: number;
+    perUsePrice: number;
+    perUseThreshold: number;
+    perUseCap: number;
+    perUseTerms: string;
+    perUseUnits: 'percent' | 'fixed';
+  } | null;
+  orders: { totalValue: number }[];
+}) => {
+  if (!billingPlan) return null;
+
+  let runningRevenue = 0;
+  let estimatedUsageCharge = 0;
+  let chargeableOrderCount = 0;
+
+  for (const order of orders) {
+    runningRevenue += order.totalValue;
+
+    const thresholdExceeded =
+      !billingPlan.perUseThreshold || billingPlan.perUseThreshold === 0
+        ? true
+        : runningRevenue > billingPlan.perUseThreshold;
+
+    if (!thresholdExceeded) continue;
+
+    chargeableOrderCount += 1;
+    estimatedUsageCharge +=
+      billingPlan.perUseUnits === 'percent'
+        ? billingPlan.perUsePrice * order.totalValue
+        : billingPlan.perUsePrice;
+  }
+
+  if (billingPlan.perUseCap > 0) {
+    estimatedUsageCharge = Math.min(estimatedUsageCharge, billingPlan.perUseCap);
+  }
+
+  return {
+    planName: billingPlan.name,
+    planPrice: billingPlan.price,
+    perUsePrice: billingPlan.perUsePrice,
+    perUseThreshold: billingPlan.perUseThreshold,
+    perUseCap: billingPlan.perUseCap,
+    perUseTerms: billingPlan.perUseTerms,
+    perUseUnits: billingPlan.perUseUnits,
+    totalMonthlyRevenue: runningRevenue,
+    chargeableOrderCount,
+    estimatedUsageCharge,
+  };
 };
 
 const MerchantEvents = ({ events, merchantId }: { events: any; merchantId: any }) => {
