@@ -1,0 +1,60 @@
+.FormGroup {
+  display: grid;
+  grid-template-columns: 1fr;
+  margin-bottom: 10px;
+  min-width: min(240px, 100%);
+  max-width: 100%;
+}
+
+.FormLabel {
+  font-size: 0.8em;
+  /* font-weight: 700; */
+  line-height: 1.75;
+  /* color: var(--violet-9-contrast); */
+  /* display: flex; */
+  /* align-items: center; */
+  /* gap: 0.2em; */
+  /* margin-bottom: 0.1em; */
+}
+
+.FormMessage {
+  font-size: 13px;
+  opacity: 0.8;
+}
+
+.ErrorMessage {
+  composes: FormMessage;
+  color: var(--red-11);
+}
+
+.Input,
+.Textarea,
+.SelectInput {
+  width: 100%;
+  max-width: 100%;
+}
+
+.Input:hover,
+.Textarea:hover {
+  /* box-shadow: 0 0 0 1px black; */
+}
+.Input:focus,
+.Textarea:focus {
+  /* box-shadow: 0 0 0 2px black; */
+}
+.Input::selection,
+.Textarea::selection {
+  /* background-color: var(--black-a9); */
+  /* color: white; */
+}
+
+.Input {
+  padding: 0 10px;
+  height: 35px;
+  line-height: 1;
+}
+
+.Textarea {
+  resize: none;
+  padding: 10px;
+}
