@@ -149,7 +149,19 @@ export default async function Page({
   });
 
   return (
-    <PageLayout heading={compliancePartnerAccountName ?? shop}>
+    <PageLayout
+      heading={compliancePartnerAccountName ?? shop}
+      actions={[
+        { href: `/merchants/${merchantId}/orders`, label: 'Orders' },
+        { href: `/merchants/${merchantId}/products`, label: 'Products', variant: 'soft' },
+        {
+          href: `/merchants/${merchantId}/events`,
+          label: 'Events',
+          variant: 'soft',
+          color: 'orange',
+        },
+      ]}
+    >
       <Grid columns={{ initial: '1', md: '2' }} gap="4">
         <Box>
           <QuickDataList
@@ -190,7 +202,10 @@ export default async function Page({
 
       <MerchantOrders orders={orders} merchantId={id} count={orderCount} />
 
-      <Heading>Products for this merchant</Heading>
+      <Flex justify="between" gap="2" align="center">
+        <Heading>Products for this merchant</Heading>
+        <Link href={`/merchants/${merchantId}/products`}>View All</Link>
+      </Flex>
       <MerchantProducts products={products} headers={productHeaders} count={productCount} />
 
       <MerchantEvents events={events} merchantId={id} />
@@ -266,7 +281,8 @@ const MerchantBillingSnapshot = ({
               {
                 label: `${billingMonthLabel} Estimated Usage Charges`,
                 value: currencyFormatterWithDecimals(billingSummary.estimatedUsageCharge),
-                tooltip: 'Estimated from order totals using current billing plan rules. Historical Shopify charge records are not stored in this admin database.',
+                tooltip:
+                  'Estimated from order totals using current billing plan rules. Historical Shopify charge records are not stored in this admin database.',
               },
               {
                 label: `${billingMonthLabel} Estimated Total Charges`,
