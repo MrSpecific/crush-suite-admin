@@ -1,11 +1,11 @@
 // import { Proposal as ProposalType } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
-import { Box, Card, Flex, Grid, Heading, Text, Table } from '@radix-ui/themes';
+import { Box, Card, Grid, Heading, Text, Table } from '@radix-ui/themes';
 import { Link } from '@/app/components/Link';
 import { NotFound } from '@/app/components/NotFound';
 import { PageLayout } from '@/app/components/PageLayout';
 import { QuickDataList } from '@/app/components/QuickDataList';
-import { dateTimeFormatter } from '@/lib/formatters';
+import { currencyFormatter, dateTimeFormatter } from '@/lib/formatters';
 
 type PurchaseItem = {
   quantity: number;
@@ -33,7 +33,40 @@ export default async function Page({ params }: { params: { id: string } }) {
 
   const { compliancePartner, purchasedItems } = data;
 
-  const items = typeof purchasedItems === 'string' ? JSON.parse(purchasedItems) : purchasedItems;
+  const items: PurchaseItem[] = Array.isArray(purchasedItems)
+    ? (purchasedItems as PurchaseItem[])
+    : typeof purchasedItems === 'string'
+      ? JSON.parse(purchasedItems)
+      : [];
+
+  const platformVariantIds = Array.from(
+    new Set(items.map((item) => item.platformVariantId).filter(Boolean))
+  ) as string[];
+
+  const products = platformVariantIds.length
+    ? await prisma.product.findMany({
+        where: {
+          merchantId: data.merchantId,
+          platformVariantId: {
+            in: platformVariantIds,
+          },
+        },
+        select: {
+          id: true,
+          name: true,
+          sku: true,
+          price: true,
+          platformProductId: true,
+          platformVariantId: true,
+        },
+      })
+    : [];
+
+  const productsByVariantId = new Map(
+    products
+      .filter((product) => product.platformVariantId)
+      .map((product) => [product.platformVariantId as string, product])
+  );
 
   return (
     <PageLayout heading={`Order Id #${id}`}>
@@ -75,6 +108,7 @@ export default async function Page({ params }: { params: { id: string } }) {
           <Table.Root>
             <Table.Header>
               <Table.Row>
+                <Table.ColumnHeaderCell>Product</Table.ColumnHeaderCell>
                 <Table.ColumnHeaderCell>Platform Variant ID</Table.ColumnHeaderCell>
                 <Table.ColumnHeaderCell>Compliance Partner ID</Table.ColumnHeaderCell>
                 <Table.ColumnHeaderCell>Quantity</Table.ColumnHeaderCell>
@@ -85,6 +119,9 @@ export default async function Page({ params }: { params: { id: string } }) {
 
             {items &&
               items.map((item: PurchaseItem) => {
+                const product = item.platformVariantId
+                  ? productsByVariantId.get(item.platformVariantId)
+                  : undefined;
                 const {
                   quantity,
                   platformVariantId,
@@ -93,7 +130,25 @@ export default async function Page({ params }: { params: { id: string } }) {
                   soldExternal,
                 } = item;
                 return (
-                  <Table.Row key={platformVariantId} align="center">
+                  <Table.Row
+                    key={`${platformVariantId || compliancePartnerProductId || productType}-${quantity}`}
+                    align="center"
+                  >
+                    <Table.Cell>
+                      {product ? (
+                        <Box>
+                          <Link href={`/products/${product.id}`}>{product.name}</Link>
+                          <Text as="div" size="1" color="gray">
+                            SKU: {product.sku || 'N/A'}
+                          </Text>
+                          <Text as="div" size="1" color="gray">
+                            Price: {currencyFormatter(product.price)}
+                          </Text>
+                        </Box>
+                      ) : (
+                        <Text color="gray">Not found in DB</Text>
+                      )}
+                    </Table.Cell>
                     <Table.RowHeaderCell>{platformVariantId}</Table.RowHeaderCell>
                     <Table.Cell>{compliancePartnerProductId}</Table.Cell>
                     <Table.Cell>{quantity}</Table.Cell>
