@@ -6,6 +6,8 @@ import { NotFound } from '@/app/components/NotFound';
 import { PageLayout } from '@/app/components/PageLayout';
 import { QuickDataList } from '@/app/components/QuickDataList';
 import { currencyFormatter, dateTimeFormatter } from '@/lib/formatters';
+import { ProductCategoryBadge } from '@/app/components/ProductCategoryBadge';
+import { ProductCategory } from '@/types/types';
 
 type PurchaseItem = {
   quantity: number;
@@ -152,7 +154,9 @@ export default async function Page({ params }: { params: { id: string } }) {
                     <Table.RowHeaderCell>{platformVariantId}</Table.RowHeaderCell>
                     <Table.Cell>{compliancePartnerProductId}</Table.Cell>
                     <Table.Cell>{quantity}</Table.Cell>
-                    <Table.Cell>{productType}</Table.Cell>
+                    <Table.Cell>
+                      <ProductCategoryBadge type={productType as ProductCategory} />
+                    </Table.Cell>
                     <Table.Cell>{soldExternal ? 'Yes' : 'NO'}</Table.Cell>
                   </Table.Row>
                 );
