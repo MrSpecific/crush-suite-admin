@@ -1,6 +1,6 @@
 import { Order } from '@prisma/client';
 import { prisma, QueryMode } from '@/lib/prisma';
-import { Box, Card, Flex, Grid, Heading, Text } from '@radix-ui/themes';
+import { Badge, Box, Card, Flex, Grid, Heading, Text } from '@radix-ui/themes';
 import { Link } from '@/app/components/Link';
 import { NotFound } from '@/app/components/NotFound';
 import { PageLayout } from '@/app/components/PageLayout';
@@ -20,6 +20,11 @@ import {
 } from '@/lib/formatters';
 import { ButtonLink } from '@/app/components/ButtonLink';
 import { OrderTableActions, getOrderTableHeaders } from '@/app/orders/orderTable';
+import {
+  getShopifyAppBilling,
+  type AppSubscription,
+  type AppSubscriptionLineItem,
+} from '@/lib/shopify';
 
 const productsTake = 10;
 const ordersTake = 20;
@@ -148,6 +153,11 @@ export default async function Page({
     orders: monthlyBillingOrders,
   });
 
+  const shopifyBillingLookup = await getShopifyBillingLookup({
+    shop: data.shop,
+    accessToken: data.accessToken,
+  });
+
   return (
     <PageLayout
       heading={compliancePartnerAccountName ?? shop}
@@ -199,6 +209,8 @@ export default async function Page({
         platformBillingId={data.platformBillingId}
         platformBillingStatus={data.platformBillingStatus}
       />
+
+      <ShopifyBillingCard lookup={shopifyBillingLookup} />
 
       <MerchantOrders orders={orders} merchantId={id} count={orderCount} />
 
@@ -382,6 +394,117 @@ const MerchantEvents = ({ events, merchantId }: { events: any; merchantId: any }
       />
       <ButtonLink href={`/merchants/${merchantId}/events`}>All Events</ButtonLink>
     </Box>
+  );
+};
+
+type ShopifyBillingLookup = {
+  subscriptions: AppSubscription[];
+  error?: string;
+};
+
+const getShopifyBillingLookup = async ({
+  shop,
+  accessToken,
+}: {
+  shop?: string | null;
+  accessToken?: string | null;
+}): Promise<ShopifyBillingLookup> => {
+  if (!shop) return { subscriptions: [], error: 'No shop stored for this merchant.' };
+  if (!accessToken) return { subscriptions: [], error: 'No access token stored for this merchant.' };
+
+  try {
+    const subscriptions = await getShopifyAppBilling({ shop, accessToken });
+    return { subscriptions };
+  } catch (err) {
+    return {
+      subscriptions: [],
+      error: err instanceof Error ? err.message : 'Unable to load Shopify billing information.',
+    };
+  }
+};
+
+const subscriptionStatusColor = (status: string): any => {
+  switch (status) {
+    case 'ACTIVE': return 'green';
+    case 'PENDING':
+    case 'ACCEPTED': return 'yellow';
+    case 'FROZEN': return 'orange';
+    case 'DECLINED':
+    case 'CANCELLED':
+    case 'EXPIRED': return 'red';
+    default: return 'gray';
+  }
+};
+
+const ShopifyBillingCard = ({ lookup }: { lookup: ShopifyBillingLookup }) => {
+  const { subscriptions, error } = lookup;
+  const hasActive = subscriptions.length > 0;
+
+  return (
+    <Card my="4" style={{ borderTop: '3px solid #95BF47' }}>
+      <Flex justify="between" align="center" gap="3" mb="3">
+        <Flex align="center" gap="2">
+          <img src="/shopify_logo_whitebg.svg" alt="Shopify" style={{ height: '20px', display: 'block' }} />
+          <Text size="2" color="gray">App Billing</Text>
+        </Flex>
+        {hasActive ? (
+          <Badge style={{ backgroundColor: '#e8f5d9', color: '#3d6b17' }} variant="soft">
+            {subscriptions.length === 1 ? 'Active' : `${subscriptions.length} Active`}
+          </Badge>
+        ) : (
+          <Badge color="gray" variant="soft">No Active Plan</Badge>
+        )}
+      </Flex>
+
+      {hasActive ? (
+        subscriptions.map((sub: AppSubscription) => (
+          <Box key={sub.id}>
+            <QuickDataList
+              data={[
+                { label: 'Plan', value: sub.name, bold: true },
+                {
+                  label: 'Status',
+                  children: (
+                    <Badge color={subscriptionStatusColor(sub.status)} variant="soft">
+                      {sub.status}
+                    </Badge>
+                  ),
+                },
+                ...sub.lineItems.flatMap((item: AppSubscriptionLineItem) => {
+                  const d = item.plan.pricingDetails;
+                  if (d.__typename === 'AppRecurringPricing') {
+                    return [{
+                      label: 'Price',
+                      value: `${d.price.amount} ${d.price.currencyCode} / ${d.interval === 'EVERY_30_DAYS' ? '30 days' : 'year'}`,
+                    }];
+                  }
+                  if (d.__typename === 'AppUsagePricing') {
+                    return [
+                      { label: 'Usage', value: `${d.balanceUsed.amount} / ${d.cappedAmount.amount} ${d.cappedAmount.currencyCode}` },
+                      { label: 'Usage Terms', value: d.terms },
+                    ];
+                  }
+                  return [];
+                }),
+                {
+                  label: 'Trial Days',
+                  value: sub.trialDays ? String(sub.trialDays) : undefined,
+                },
+                {
+                  label: 'Period End',
+                  value: sub.currentPeriodEnd
+                    ? dateTimeFormatter(new Date(sub.currentPeriodEnd))
+                    : undefined,
+                },
+                { label: 'Created', value: dateTimeFormatter(new Date(sub.createdAt)) },
+              ]}
+            />
+          </Box>
+        ))
+      ) : (
+        <Text color="gray" size="2">{error || 'No active app subscription found.'}</Text>
+      )}
+    </Card>
   );
 };
 

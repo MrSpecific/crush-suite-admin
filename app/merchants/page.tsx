@@ -26,16 +26,17 @@ export default async function Page({ searchParams }: { searchParams: PageSearchP
   const { page, search, status } = searchParams;
   const searchString = search?.toString();
   const statusFilter = normalizeMerchantStatus(status);
-  const where: Prisma.MerchantWhereInput | undefined = search || statusFilter
-    ? {
-        ...(search
-          ? {
-              OR: [{ shop: { contains: searchString, mode: QueryMode.insensitive } }],
-            }
-          : {}),
-        ...(statusFilter ? { status: statusFilter } : {}),
-      }
-    : undefined;
+  const where: Prisma.MerchantWhereInput | undefined =
+    search || statusFilter
+      ? {
+          ...(search
+            ? {
+                OR: [{ shop: { contains: searchString, mode: QueryMode.insensitive } }],
+              }
+            : {}),
+          ...(statusFilter ? { status: statusFilter } : {}),
+        }
+      : undefined;
   const count = await prisma.merchant.count({ where });
   const merchants = await prisma.merchant.findMany({
     ...queryPagination({ page }),
@@ -50,7 +51,7 @@ export default async function Page({ searchParams }: { searchParams: PageSearchP
   const headers: DataHeaders = [
     { type: 'data', title: 'Data' },
     // { id: 'id', title: 'ID' },
-    { id: 'compliancePartnerAccountName', title: 'Name' },
+    { id: 'compliancePartnerAccountName', title: 'Name', formatter: linkToMerchantFormatter },
     { id: 'shop', title: 'Shop', formatter: linkToMerchantFormatter },
     { id: 'createdAt', title: 'Created At', formatter: dateFormatter },
     // { id: 'updatedAt', title: 'Updated At', formatter: dateFormatter },

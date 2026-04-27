@@ -12,11 +12,8 @@ import {
 } from '@/lib/formatters';
 import {
   getShopifyAdminOrderUrl,
-  getShopifyAppBilling,
   getShopifyOrderByPlatformOrderId,
   getShopifyOrderSourceLabel,
-  type AppSubscription,
-  type AppSubscriptionLineItem,
   type ShopifyOrder,
 } from '@/lib/shopify';
 import { ProductCategoryBadge } from '@/app/components/ProductCategoryBadge';
@@ -136,17 +133,11 @@ export default async function Page({ params }: { params: { id: string } }) {
   const shippingAddr = data.shippingAddress as ShopifyAddress | null;
   const billingAddr = data.billingAddress as ShopifyAddress | null;
   const hasBilling = billingAddr && JSON.stringify(billingAddr) !== JSON.stringify(shippingAddr);
-  const [shopifyOrderLookup] = await Promise.all([
-    getShopifyOrderLookup({
-      shop: data.merchant?.shop,
-      accessToken: data.merchant?.accessToken,
-      platformOrderId: data.platformOrderId,
-    }),
-    // getShopifyBillingLookup({
-    //   shop: data.merchant?.shop,
-    //   accessToken: data.merchant?.accessToken,
-    // }),
-  ]);
+  const shopifyOrderLookup = await getShopifyOrderLookup({
+    shop: data.merchant?.shop,
+    accessToken: data.merchant?.accessToken,
+    platformOrderId: data.platformOrderId,
+  });
 
   const heading = data.platformOrderName ? `Order ${data.platformOrderName}` : `Order #${id}`;
 
@@ -213,8 +204,6 @@ export default async function Page({ params }: { params: { id: string } }) {
 
         <Flex direction="column" gap="4">
           <ShopifyOrderCard shop={data.merchant?.shop} lookup={shopifyOrderLookup} />
-
-          {/* <ShopifyBillingCard lookup={shopifyBillingLookup} /> */}
 
           <Card>
             <Heading size="3" mb="3">
