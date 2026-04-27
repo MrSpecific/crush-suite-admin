@@ -33,7 +33,10 @@ export default async function Page({ params }: { params: { id: string } }) {
     : [];
 
   return (
-    <PageLayout heading={fullName}>
+    <PageLayout
+      heading={`${fullName}`}
+      subheading={data.merchant?.compliancePartnerAccountName || data.merchant?.shop || data.shop}
+    >
       <Grid columns={{ initial: '1', md: '2' }} gap="4">
         <Card>
           <Heading size="3" mb="3">
