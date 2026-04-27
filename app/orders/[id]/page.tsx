@@ -46,6 +46,24 @@ type ShopifyAddress = {
   phone?: string;
 };
 
+const billingStatusColor = (status: string): any => {
+  switch (status.toLowerCase()) {
+    case 'active':
+      return 'green';
+    case 'pending':
+      return 'yellow';
+    case 'frozen':
+      return 'orange';
+    case 'declined':
+    case 'cancelled':
+      return 'red';
+    case 'expired':
+      return 'gray';
+    default:
+      return 'gray';
+  }
+};
+
 const fulfillmentStatusMeta: Record<string, { label: string; color: string }> = {
   SHIPPING_LABELS_GENERATED: { label: 'Labels Generated', color: 'yellow' },
   SHIPPED: { label: 'Shipped', color: 'blue' },
@@ -65,7 +83,7 @@ export default async function Page({ params }: { params: { id: string } }) {
     },
     include: {
       customer: true,
-      merchant: true,
+      merchant: { include: { billingPlan: true } },
       Fulfillment: {
         orderBy: { createdAt: 'asc' },
       },
@@ -189,16 +207,10 @@ export default async function Page({ params }: { params: { id: string } }) {
 
           <Card>
             <Heading size="3" mb="3">
-              Customer & Merchant
+              Customer
             </Heading>
             <QuickDataList
               data={[
-                {
-                  label: 'Merchant',
-                  value: data.merchant?.compliancePartnerAccountName,
-                  linkTo: `/merchants/${data.merchantId}`,
-                },
-                { label: 'Shop', value: data.merchant?.shop },
                 {
                   label: 'Customer Name',
                   value:
@@ -208,6 +220,42 @@ export default async function Page({ params }: { params: { id: string } }) {
                 { label: 'Customer Email', value: data.customer?.email },
                 { label: 'Customer DOB', value: data.customer?.dob?.toLocaleDateString() },
                 { label: 'Phone', value: data.phone || data.customer?.phoneNumber },
+              ]}
+            />
+          </Card>
+
+          <Card>
+            <Heading size="3" mb="3">
+              Merchant
+            </Heading>
+            <QuickDataList
+              data={[
+                {
+                  label: 'Merchant',
+                  value: data.merchant?.compliancePartnerAccountName,
+                  linkTo: `/merchants/${data.merchantId}`,
+                },
+                {
+                  label: 'Shop',
+                  value: data.merchant?.shop,
+                  linkTo: new URL(`https://${data.merchant?.shop}`).toString(),
+                  target: '_blank',
+                },
+                {
+                  label: 'Merchant Billing Plan',
+                  value: data.merchant?.billingPlan?.name,
+                },
+                {
+                  label: 'Merchant Billing Status',
+                  children: data.merchant?.platformBillingStatus ? (
+                    <Badge
+                      color={billingStatusColor(data.merchant.platformBillingStatus)}
+                      variant="soft"
+                    >
+                      {data.merchant.platformBillingStatus}
+                    </Badge>
+                  ) : undefined,
+                },
               ]}
             />
           </Card>
