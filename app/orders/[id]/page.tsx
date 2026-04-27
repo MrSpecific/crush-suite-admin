@@ -12,8 +12,11 @@ import {
 } from '@/lib/formatters';
 import {
   getShopifyAdminOrderUrl,
+  getShopifyAppBilling,
   getShopifyOrderByPlatformOrderId,
   getShopifyOrderSourceLabel,
+  type AppSubscription,
+  type AppSubscriptionLineItem,
   type ShopifyOrder,
 } from '@/lib/shopify';
 import { ProductCategoryBadge } from '@/app/components/ProductCategoryBadge';
@@ -133,11 +136,17 @@ export default async function Page({ params }: { params: { id: string } }) {
   const shippingAddr = data.shippingAddress as ShopifyAddress | null;
   const billingAddr = data.billingAddress as ShopifyAddress | null;
   const hasBilling = billingAddr && JSON.stringify(billingAddr) !== JSON.stringify(shippingAddr);
-  const shopifyOrderLookup = await getShopifyOrderLookup({
-    shop: data.merchant?.shop,
-    accessToken: data.merchant?.accessToken,
-    platformOrderId: data.platformOrderId,
-  });
+  const [shopifyOrderLookup] = await Promise.all([
+    getShopifyOrderLookup({
+      shop: data.merchant?.shop,
+      accessToken: data.merchant?.accessToken,
+      platformOrderId: data.platformOrderId,
+    }),
+    // getShopifyBillingLookup({
+    //   shop: data.merchant?.shop,
+    //   accessToken: data.merchant?.accessToken,
+    // }),
+  ]);
 
   const heading = data.platformOrderName ? `Order ${data.platformOrderName}` : `Order #${id}`;
 
@@ -205,6 +214,8 @@ export default async function Page({ params }: { params: { id: string } }) {
         <Flex direction="column" gap="4">
           <ShopifyOrderCard shop={data.merchant?.shop} lookup={shopifyOrderLookup} />
 
+          {/* <ShopifyBillingCard lookup={shopifyBillingLookup} /> */}
+
           <Card>
             <Heading size="3" mb="3">
               Customer
@@ -216,6 +227,7 @@ export default async function Page({ params }: { params: { id: string } }) {
                   value:
                     [data.customer?.firstName, data.customer?.lastName].filter(Boolean).join(' ') ||
                     undefined,
+                  linkTo: data.customer ? `/customers/${data.customer.id}` : undefined,
                 },
                 { label: 'Customer Email', value: data.customer?.email },
                 { label: 'Customer DOB', value: data.customer?.dob?.toLocaleDateString() },
@@ -262,93 +274,99 @@ export default async function Page({ params }: { params: { id: string } }) {
         </Flex>
       </Grid>
 
-      <Card mt="6">
-        <Heading size="3" mb="3">
-          Financials
-        </Heading>
-        <QuickDataList
-          data={[
-            {
-              label: 'Total Value',
-              value: currencyFormatterWithDecimals(data.totalValue),
-              bold: true,
-            },
-            { label: 'Tax', value: currencyFormatterWithDecimals(data.totalTax) },
-            { label: 'Shipping', value: currencyFormatterWithDecimals(data.totalShipping) },
-            {
-              label: 'Discounts',
-              value: data.totalDiscounts
-                ? currencyFormatterWithDecimals(data.totalDiscounts)
-                : undefined,
-            },
-            {
-              label: 'Compliance Fees',
-              value: data.totalComplianceFees
-                ? currencyFormatterWithDecimals(data.totalComplianceFees)
-                : undefined,
-            },
-            { label: 'Quantity', value: String(data.quantityItems) },
-          ]}
-        />
-      </Card>
+      <Grid gap="4" columns={{ initial: '1', md: '1fr 2fr' }} mt="4">
+        <Card>
+          <Heading size="3" mb="3">
+            Financials
+          </Heading>
+          <QuickDataList
+            data={[
+              {
+                label: 'Total Value',
+                value: currencyFormatterWithDecimals(data.totalValue),
+                bold: true,
+              },
+              { label: 'Tax', value: currencyFormatterWithDecimals(data.totalTax) },
+              { label: 'Shipping', value: currencyFormatterWithDecimals(data.totalShipping) },
+              {
+                label: 'Discounts',
+                value: data.totalDiscounts
+                  ? currencyFormatterWithDecimals(data.totalDiscounts)
+                  : undefined,
+              },
+              {
+                label: 'Compliance Fees',
+                value: data.totalComplianceFees
+                  ? currencyFormatterWithDecimals(data.totalComplianceFees)
+                  : undefined,
+              },
+              { label: 'Quantity', value: String(data.quantityItems) },
+            ]}
+          />
+        </Card>
 
-      {(shippingAddr || data.shippingMethod) && (
-        <Grid gap="4" columns={{ initial: '1', md: hasBilling ? '2' : '1' }} mt="4">
-          <Card>
-            <Heading size="3" mb="3">
-              Shipping
-            </Heading>
-            <QuickDataList
-              data={[
-                { label: 'Method', value: data.shippingMethod },
-                {
-                  label: 'Ship To',
-                  value: shippingAddr
-                    ? [shippingAddr.firstName, shippingAddr.lastName].filter(Boolean).join(' ')
-                    : undefined,
-                },
-                {
-                  label: 'Address',
-                  value: shippingAddr
-                    ? [shippingAddr.address1, shippingAddr.address2].filter(Boolean).join(', ')
-                    : undefined,
-                },
-                { label: 'City', value: shippingAddr?.city },
-                {
-                  label: 'State',
-                  value: shippingAddr?.province || data.shippingState,
-                },
-                { label: 'ZIP', value: shippingAddr?.zip || data.shippingZip },
-                { label: 'Country', value: shippingAddr?.country },
-              ]}
-            />
-          </Card>
-
-          {hasBilling && (
+        {(shippingAddr || data.shippingMethod) && (
+          <Grid gap="4" columns={{ initial: '1', md: hasBilling ? '2' : '1' }}>
             <Card>
               <Heading size="3" mb="3">
-                Billing Address
+                Shipping
               </Heading>
               <QuickDataList
                 data={[
+                  { label: 'Method', value: data.shippingMethod },
                   {
-                    label: 'Bill To',
-                    value: [billingAddr.firstName, billingAddr.lastName].filter(Boolean).join(' '),
+                    label: 'Ship To',
+                    value: shippingAddr
+                      ? [shippingAddr.firstName, shippingAddr.lastName].filter(Boolean).join(' ')
+                      : undefined,
                   },
                   {
                     label: 'Address',
-                    value: [billingAddr.address1, billingAddr.address2].filter(Boolean).join(', '),
+                    value: shippingAddr
+                      ? [shippingAddr.address1, shippingAddr.address2].filter(Boolean).join(', ')
+                      : undefined,
                   },
-                  { label: 'City', value: billingAddr.city },
-                  { label: 'State', value: billingAddr.province },
-                  { label: 'ZIP', value: billingAddr.zip },
-                  { label: 'Country', value: billingAddr.country },
+                  { label: 'City', value: shippingAddr?.city },
+                  {
+                    label: 'State',
+                    value: shippingAddr?.province || data.shippingState,
+                  },
+                  { label: 'ZIP', value: shippingAddr?.zip || data.shippingZip },
+                  { label: 'Country', value: shippingAddr?.country },
                 ]}
               />
             </Card>
-          )}
-        </Grid>
-      )}
+
+            {hasBilling && (
+              <Card>
+                <Heading size="3" mb="3">
+                  Billing Address
+                </Heading>
+                <QuickDataList
+                  data={[
+                    {
+                      label: 'Bill To',
+                      value: [billingAddr.firstName, billingAddr.lastName]
+                        .filter(Boolean)
+                        .join(' '),
+                    },
+                    {
+                      label: 'Address',
+                      value: [billingAddr.address1, billingAddr.address2]
+                        .filter(Boolean)
+                        .join(', '),
+                    },
+                    { label: 'City', value: billingAddr.city },
+                    { label: 'State', value: billingAddr.province },
+                    { label: 'ZIP', value: billingAddr.zip },
+                    { label: 'Country', value: billingAddr.country },
+                  ]}
+                />
+              </Card>
+            )}
+          </Grid>
+        )}
+      </Grid>
 
       {data.Fulfillment.length > 0 && (
         <Card my="5">

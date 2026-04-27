@@ -273,3 +273,101 @@ async function parseShopifyResponse<TData>(response: Response) {
 function formatGraphqlErrors(errors: ShopifyGraphqlError[]) {
   return errors.map((error) => error.message).join('; ');
 }
+
+// ─── App Billing ─────────────────────────────────────────────────────────────
+
+type AppRecurringPricing = {
+  __typename: 'AppRecurringPricing';
+  price: Money;
+  interval: 'ANNUAL' | 'EVERY_30_DAYS';
+};
+
+type AppUsagePricing = {
+  __typename: 'AppUsagePricing';
+  balanceUsed: Money;
+  cappedAmount: Money;
+  terms: string;
+};
+
+export type AppSubscriptionLineItem = {
+  id: string;
+  plan: {
+    pricingDetails: AppRecurringPricing | AppUsagePricing;
+  };
+};
+
+export type AppSubscription = {
+  id: string;
+  name: string;
+  status: string;
+  createdAt: string;
+  currentPeriodEnd?: string | null;
+  trialDays?: number | null;
+  lineItems: AppSubscriptionLineItem[];
+};
+
+type AppBillingQueryData = {
+  currentAppInstallation: {
+    id: string;
+    activeSubscriptions: AppSubscription[];
+  };
+};
+
+const SHOPIFY_APP_BILLING_QUERY = /* GraphQL */ `
+  query CrushSuiteAdminAppBilling {
+    currentAppInstallation {
+      id
+      activeSubscriptions {
+        id
+        name
+        status
+        createdAt
+        currentPeriodEnd
+        trialDays
+        lineItems {
+          id
+          plan {
+            pricingDetails {
+              ... on AppRecurringPricing {
+                __typename
+                price {
+                  amount
+                  currencyCode
+                }
+                interval
+              }
+              ... on AppUsagePricing {
+                __typename
+                balanceUsed {
+                  amount
+                  currencyCode
+                }
+                cappedAmount {
+                  amount
+                  currencyCode
+                }
+                terms
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+`;
+
+export async function getShopifyAppBilling({
+  shop,
+  accessToken,
+}: {
+  shop: string;
+  accessToken: string;
+}): Promise<AppSubscription[]> {
+  const data = await shopifyAdminGraphql<AppBillingQueryData>({
+    shop,
+    accessToken,
+    query: SHOPIFY_APP_BILLING_QUERY,
+  });
+
+  return data.currentAppInstallation.activeSubscriptions;
+}
