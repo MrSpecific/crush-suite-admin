@@ -15,10 +15,16 @@ import { ProductCategory } from '@/types/types';
 import { orderStatusMetaData } from '@/lib/metaData';
 
 type PurchaseItem = {
+  name?: string;
+  price?: number;
   quantity: number;
+  dbProductId?: number;
+  isDbProduct?: boolean;
   soldExternal?: boolean;
   productType?: string;
   platformVariantId?: string;
+  isComplianceProduct?: boolean;
+  isVinoshipperProduct?: boolean;
   compliancePartnerProductId?: string;
 };
 
@@ -364,14 +370,35 @@ export default async function Page({ params }: { params: { id: string } }) {
                           </Text>
                         </Box>
                       ) : (
-                        <Text color="gray">Not found in DB</Text>
+                        <Box>
+                          <Text as="div" weight="bold">
+                            {item.name || 'Unmatched line item'}
+                          </Text>
+                          <Text as="div" size="1" color="gray">
+                            Not found in DB
+                          </Text>
+                          {item.price !== undefined && (
+                            <Text as="div" size="1" color="gray">
+                              Price: {currencyFormatter(item.price)}
+                            </Text>
+                          )}
+                          {item.dbProductId ? (
+                            <Text as="div" size="1" color="gray">
+                              DB Product ID: {item.dbProductId}
+                            </Text>
+                          ) : null}
+                        </Box>
                       )}
                     </Table.Cell>
                     <Table.RowHeaderCell>{platformVariantId}</Table.RowHeaderCell>
                     <Table.Cell>{compliancePartnerProductId}</Table.Cell>
                     <Table.Cell>{quantity}</Table.Cell>
                     <Table.Cell>
-                      <ProductCategoryBadge type={productType as ProductCategory} />
+                      {productType ? (
+                        <ProductCategoryBadge type={productType as ProductCategory} />
+                      ) : (
+                        <Text color="gray">N/A</Text>
+                      )}
                     </Table.Cell>
                     <Table.Cell>{soldExternal ? 'Yes' : 'NO'}</Table.Cell>
                   </Table.Row>
