@@ -74,6 +74,15 @@ const fulfillmentStatusMeta: Record<string, { label: string; color: string }> = 
   ERROR: { label: 'Error', color: 'red' },
 };
 
+const webhookStatusMeta: Record<string, { label: string; color: string }> = {
+  RECEIVED: { label: 'Received', color: 'blue' },
+  PROCESSING: { label: 'Processing', color: 'yellow' },
+  SUCCESS: { label: 'Success', color: 'green' },
+  FAILED: { label: 'Failed', color: 'red' },
+  ERROR: { label: 'Error', color: 'red' },
+  SKIPPED: { label: 'Skipped', color: 'gray' },
+};
+
 export default async function Page({ params }: { params: { id: string } }) {
   const { id } = params;
 
@@ -109,9 +118,7 @@ export default async function Page({ params }: { params: { id: string } }) {
     ? await prisma.product.findMany({
         where: {
           merchantId: data.merchantId,
-          platformVariantId: {
-            in: platformVariantIds,
-          },
+          platformVariantId: { in: platformVariantIds },
         },
         select: {
           id: true,
@@ -121,6 +128,15 @@ export default async function Page({ params }: { params: { id: string } }) {
           platformProductId: true,
           platformVariantId: true,
         },
+      })
+    : [];
+
+  const webhookLogs = data.platformOrderId
+    ? await prisma.orderWebhookLog.findMany({
+        where: {
+          OR: [{ platformOrderId: data.platformOrderId }, { orderId: data.id }],
+        },
+        orderBy: { createdAt: 'asc' },
       })
     : [];
 
@@ -476,6 +492,57 @@ export default async function Page({ params }: { params: { id: string } }) {
           </Table.Root>
         </Box>
       </Card>
+
+      {webhookLogs.length > 0 && (
+        <Card my="5">
+          <Heading mb="2">Webhook Logs</Heading>
+          <Table.Root>
+            <Table.Header>
+              <Table.Row>
+                <Table.ColumnHeaderCell>ID</Table.ColumnHeaderCell>
+                <Table.ColumnHeaderCell>Topic</Table.ColumnHeaderCell>
+                <Table.ColumnHeaderCell>Status</Table.ColumnHeaderCell>
+                <Table.ColumnHeaderCell>Errors</Table.ColumnHeaderCell>
+                <Table.ColumnHeaderCell>Received</Table.ColumnHeaderCell>
+              </Table.Row>
+            </Table.Header>
+            <Table.Body>
+              {webhookLogs.map((log) => {
+                const wMeta = webhookStatusMeta[log.status];
+                return (
+                  <Table.Row key={log.id} align="center">
+                    <Table.Cell>{log.id}</Table.Cell>
+                    <Table.Cell>
+                      <Text as="span" style={{ fontFamily: 'monospace' }} size="2">
+                        {log.topic}
+                      </Text>
+                    </Table.Cell>
+                    <Table.Cell>
+                      <Badge color={wMeta?.color as any} variant="soft">
+                        {wMeta?.label || log.status}
+                      </Badge>
+                    </Table.Cell>
+                    <Table.Cell>
+                      {log.errors.length > 0 ? (
+                        <Box>
+                          {log.errors.map((err, i) => (
+                            <Text key={i} as="div" size="1" color="red">
+                              {err}
+                            </Text>
+                          ))}
+                        </Box>
+                      ) : (
+                        <Text color="gray">—</Text>
+                      )}
+                    </Table.Cell>
+                    <Table.Cell>{dateTimeFormatter(log.createdAt)}</Table.Cell>
+                  </Table.Row>
+                );
+              })}
+            </Table.Body>
+          </Table.Root>
+        </Card>
+      )}
     </PageLayout>
   );
 }
