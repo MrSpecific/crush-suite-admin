@@ -211,38 +211,38 @@ export default async function Page({ params }: { params: { id: string } }) {
               ]}
             />
           </Card>
-
-          <Card>
-            <Heading size="3" mb="3">
-              Financials
-            </Heading>
-            <QuickDataList
-              data={[
-                {
-                  label: 'Total Value',
-                  value: currencyFormatterWithDecimals(data.totalValue),
-                  bold: true,
-                },
-                { label: 'Tax', value: currencyFormatterWithDecimals(data.totalTax) },
-                { label: 'Shipping', value: currencyFormatterWithDecimals(data.totalShipping) },
-                {
-                  label: 'Discounts',
-                  value: data.totalDiscounts
-                    ? currencyFormatterWithDecimals(data.totalDiscounts)
-                    : undefined,
-                },
-                {
-                  label: 'Compliance Fees',
-                  value: data.totalComplianceFees
-                    ? currencyFormatterWithDecimals(data.totalComplianceFees)
-                    : undefined,
-                },
-                { label: 'Quantity', value: String(data.quantityItems) },
-              ]}
-            />
-          </Card>
         </Flex>
       </Grid>
+
+      <Card mt="6">
+        <Heading size="3" mb="3">
+          Financials
+        </Heading>
+        <QuickDataList
+          data={[
+            {
+              label: 'Total Value',
+              value: currencyFormatterWithDecimals(data.totalValue),
+              bold: true,
+            },
+            { label: 'Tax', value: currencyFormatterWithDecimals(data.totalTax) },
+            { label: 'Shipping', value: currencyFormatterWithDecimals(data.totalShipping) },
+            {
+              label: 'Discounts',
+              value: data.totalDiscounts
+                ? currencyFormatterWithDecimals(data.totalDiscounts)
+                : undefined,
+            },
+            {
+              label: 'Compliance Fees',
+              value: data.totalComplianceFees
+                ? currencyFormatterWithDecimals(data.totalComplianceFees)
+                : undefined,
+            },
+            { label: 'Quantity', value: String(data.quantityItems) },
+          ]}
+        />
+      </Card>
 
       {(shippingAddr || data.shippingMethod) && (
         <Grid gap="4" columns={{ initial: '1', md: hasBilling ? '2' : '1' }} mt="4">
