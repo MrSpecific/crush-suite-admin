@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma';
 import { Box, Card, Grid, Heading, Text, Table, Badge, Callout, Flex } from '@radix-ui/themes';
 import { ExclamationTriangleIcon } from '@radix-ui/react-icons';
 import { Link } from '@/app/components/Link';
+import { DataDialog } from '@/app/components/DataDialog';
 import { NotFound } from '@/app/components/NotFound';
 import { PageLayout } from '@/app/components/PageLayout';
 import { QuickDataList } from '@/app/components/QuickDataList';
@@ -504,6 +505,7 @@ export default async function Page({ params }: { params: { id: string } }) {
                 <Table.ColumnHeaderCell>Status</Table.ColumnHeaderCell>
                 <Table.ColumnHeaderCell>Errors</Table.ColumnHeaderCell>
                 <Table.ColumnHeaderCell>Received</Table.ColumnHeaderCell>
+                <Table.ColumnHeaderCell></Table.ColumnHeaderCell>
               </Table.Row>
             </Table.Header>
             <Table.Body>
@@ -536,6 +538,9 @@ export default async function Page({ params }: { params: { id: string } }) {
                       )}
                     </Table.Cell>
                     <Table.Cell>{dateTimeFormatter(log.createdAt)}</Table.Cell>
+                    <Table.Cell>
+                      <DataDialog title={`Webhook Log #${log.id}`} data={log} />
+                    </Table.Cell>
                   </Table.Row>
                 );
               })}
