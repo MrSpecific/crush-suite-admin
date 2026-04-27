@@ -28,7 +28,7 @@ export default async function Page({ searchParams }: { searchParams: PageSearchP
   //   : undefined;
   const count = await prisma.subscriptionDiscount.count();
   const discounts = await prisma.subscriptionDiscount.findMany({
-    ...queryPagination({ page }),
+    ...queryPagination({ page, count }),
     include: {
       merchants: true,
     },

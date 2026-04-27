@@ -35,7 +35,7 @@ export default async function Page({
 
   const count = await prisma.order.count({ where });
   const orders = await prisma.order.findMany({
-    ...queryPagination({ page }),
+    ...queryPagination({ page, count }),
     where,
     orderBy: {
       createdAt: 'desc',

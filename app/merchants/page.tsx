@@ -39,7 +39,7 @@ export default async function Page({ searchParams }: { searchParams: PageSearchP
       : undefined;
   const count = await prisma.merchant.count({ where });
   const merchants = await prisma.merchant.findMany({
-    ...queryPagination({ page }),
+    ...queryPagination({ page, count }),
     where,
     include: {
       billingPlan: true,

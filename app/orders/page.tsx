@@ -10,7 +10,7 @@ export default async function Page({ searchParams }: { searchParams: PageSearchP
 
   const count = await prisma.order.count();
   const orders = await prisma.order.findMany({
-    ...queryPagination({ page }),
+    ...queryPagination({ page, count }),
     include: {
       merchant: {
         select: { compliancePartnerAccountName: true, shop: true, id: true },

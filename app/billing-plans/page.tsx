@@ -21,7 +21,7 @@ export default async function Page({
   const { page } = searchParams;
   const count = await prisma.billingPlan.count();
   const data = await prisma.billingPlan.findMany({
-    ...queryPagination({ page, take }),
+    ...queryPagination({ page, take, count }),
   });
   type DataHeaders = QueryToHeader<typeof data>[];
 

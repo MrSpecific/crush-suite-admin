@@ -19,7 +19,7 @@ export default async function Page({ searchParams }: { searchParams: PageSearchP
   const searchString = search?.toString();
   const count = await prisma.gDPR.count();
   const requests = await prisma.gDPR.findMany({
-    ...queryPagination({ page }),
+    ...queryPagination({ page, count }),
     include: {
       merchant: {
         select: { compliancePartnerAccountName: true, shop: true, id: true },

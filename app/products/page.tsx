@@ -12,6 +12,8 @@ import {
   linkToProductFormatter,
 } from '@/lib/formatters';
 
+const productsTake = 20;
+
 const Actions = ({ ...props }) => {
   return (
     <EditDialog title="Edit Merchant" trigger="Edit">
@@ -31,7 +33,7 @@ export default async function Page({ searchParams }: { searchParams: PageSearchP
     : undefined;
   const count = await prisma.product.count({ where });
   const data = await prisma.product.findMany({
-    ...queryPagination({ page }),
+    ...queryPagination({ page, take: productsTake, count }),
     where,
   });
   type DataHeaders = QueryToHeader<typeof data>[];
@@ -61,7 +63,7 @@ export default async function Page({ searchParams }: { searchParams: PageSearchP
     <PageLayout heading="Products">
       <DataFilter />
       <DataTable headers={headers} data={data} Actions={Actions} />
-      <Pagination take={10} count={count} />
+      <Pagination take={productsTake} count={count} />
     </PageLayout>
   );
 }

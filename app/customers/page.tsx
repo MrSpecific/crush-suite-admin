@@ -31,7 +31,7 @@ export default async function Page({ searchParams }: { searchParams: PageSearchP
     : undefined;
   const count = await prisma.customer.count({ where });
   const customers = await prisma.customer.findMany({
-    ...queryPagination({ page }),
+    ...queryPagination({ page, count }),
     where,
   });
   type DataHeaders = QueryToHeader<typeof customers>[];

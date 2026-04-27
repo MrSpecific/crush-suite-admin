@@ -20,6 +20,8 @@ import {
 } from '@/lib/formatters';
 import { ButtonLink } from '@/app/components/ButtonLink';
 
+const productsTake = 10;
+
 export default async function Page({
   params,
   searchParams,
@@ -40,7 +42,7 @@ export default async function Page({
       };
   const productCount = await prisma.product.count({ where });
   const products = await prisma.product.findMany({
-    ...queryPagination({ page }),
+    ...queryPagination({ page, take: productsTake, count: productCount }),
     where,
   });
   type DataHeaders = QueryToHeader<typeof products>[];
@@ -149,7 +151,7 @@ const MerchantProducts = ({
     <Box>
       <DataFilter />
       <DataTable headers={headers} data={products} />
-      <Pagination take={10} count={count} />
+      <Pagination take={productsTake} count={count} />
     </Box>
   );
 };
