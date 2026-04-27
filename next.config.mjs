@@ -1,8 +1,5 @@
 // @ts-check
 /** @type {import('next').NextConfig} */
-import { PrismaPlugin } from '@prisma/nextjs-monorepo-workaround-plugin';
-
-const prismaPlugin = new PrismaPlugin();
 
 const nextConfig = {
   webpack: (config, { isServer }) => {
@@ -12,7 +9,7 @@ const nextConfig = {
     });
 
     if (isServer) {
-      config.plugins = [...config.plugins, prismaPlugin];
+      config.plugins = [...config.plugins];
     }
 
     return config;

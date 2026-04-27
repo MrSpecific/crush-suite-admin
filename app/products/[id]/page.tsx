@@ -232,7 +232,7 @@ export default async function Page({ params }: { params: { id: string } }) {
         <JsonCard title="All Variant Options" data={data.productVariantAllOptions} />
         <AlcoholDataCard data={data.alcoholData} />
         <JsonCard title="No-Sale States Data" data={data.noSaleStatesData} />
-        <JsonCard title="Price Data" data={data.priceData} />
+        <PriceDataCard data={data.priceData} />
       </Grid>
     </PageLayout>
   );
@@ -277,6 +277,157 @@ const VariantOptionsCard = ({ title, data }: { title: string; data: unknown }) =
           </Box>
         ))}
       </Flex>
+    </Card>
+  );
+};
+
+const PriceDataCard = ({ data }: { data: unknown }) => {
+  const priceData = normalizePriceData(data);
+
+  if (!priceData) {
+    return (
+      <Card>
+        <Heading as="h2" size="3" mb="3">
+          Price Data
+        </Heading>
+        <Text color="gray">No data available</Text>
+      </Card>
+    );
+  }
+
+  const allowedQuantities = getNumberArray(priceData.allowedQuantities);
+
+  const summaryItems = [
+    { label: 'MSRP', value: formatCurrencyValue(priceData.msrp) },
+    { label: 'Case Size', value: formatUnitCount(priceData.caseSize, 'unit') },
+    { label: 'Min Order', value: formatUnitCount(priceData.minOrder, 'unit') },
+    {
+      label: 'Max Order',
+      value: 'maxOrder' in priceData ? formatMaxOrder(priceData.maxOrder) : undefined,
+    },
+  ].filter(hasDisplayValue);
+
+  const orderRules = [
+    getPriceDataListItem(priceData, 'msrp', 'MSRP', formatCurrencyValue),
+    getPriceDataListItem(priceData, 'caseSize', 'Case Size', (value) =>
+      formatUnitCount(value, 'unit')
+    ),
+    getPriceDataListItem(priceData, 'minOrder', 'Minimum Order', (value) =>
+      formatUnitCount(value, 'unit')
+    ),
+    getPriceDataListItem(priceData, 'maxOrder', 'Maximum Order', formatMaxOrder, true),
+    getPriceDataListItem(priceData, 'increments', 'Order Increments', (value) =>
+      formatUnitCount(value, 'unit')
+    ),
+    getPriceDataListItem(priceData, 'moqUnits', 'MOQ Units'),
+    getPriceDataListItem(
+      priceData,
+      'excludeFromMinOrderQty',
+      'Exclude From Minimum Order',
+      formatYesNo
+    ),
+  ].filter(Boolean) as QuickDataListItem[];
+
+  const additionalItems = Object.entries(priceData)
+    .filter(([key]) => !knownPriceDataKeys.has(key))
+    .map(([key, value]) => {
+      const formattedValue = formatPriceValue(value);
+
+      return formattedValue
+        ? {
+            label: humanizeOptionLabel(key),
+            value: formattedValue,
+          }
+        : undefined;
+    })
+    .filter(Boolean) as QuickDataListItem[];
+
+  const hasStructuredData =
+    summaryItems.length || orderRules.length || allowedQuantities.length || additionalItems.length;
+
+  const msrpDisplay = formatCurrencyValue(priceData.msrp);
+  const caseSizeDisplay = formatPriceValue(priceData.caseSize);
+
+  return (
+    <Card>
+      <Flex justify="between" align="start" gap="3" mb="3" wrap="wrap">
+        <Heading as="h2" size="3">
+          Price Data
+        </Heading>
+        <Flex gap="2" wrap="wrap">
+          {msrpDisplay && (
+            <Badge color="green" variant="soft">
+              {msrpDisplay} MSRP
+            </Badge>
+          )}
+          {caseSizeDisplay && (
+            <Badge color="gray" variant="soft">
+              Case of {caseSizeDisplay}
+            </Badge>
+          )}
+        </Flex>
+      </Flex>
+
+      {hasStructuredData ? (
+        <Flex direction="column" gap="4">
+          {summaryItems.length ? (
+            <Grid columns={{ initial: '2', md: '4' }} gap="2">
+              {summaryItems.map((item) => (
+                <Box
+                  key={item.label}
+                  p="3"
+                  style={{
+                    backgroundColor: 'var(--gray-2)',
+                    borderRadius: 'var(--radius-3)',
+                  }}
+                >
+                  <Text as="div" size="1" color="gray" mb="1">
+                    {item.label}
+                  </Text>
+                  <Text as="div" size="3" weight="bold">
+                    {item.value}
+                  </Text>
+                </Box>
+              ))}
+            </Grid>
+          ) : null}
+
+          {orderRules.length ? (
+            <Box>
+              <Text as="div" size="1" color="gray" weight="bold" mb="2">
+                Order Rules
+              </Text>
+              <QuickDataList data={orderRules} size="1" />
+            </Box>
+          ) : null}
+
+          {allowedQuantities.length ? (
+            <Box>
+              <Text as="div" size="1" color="gray" weight="bold" mb="2">
+                Allowed Quantities
+              </Text>
+              <Flex gap="2" wrap="wrap">
+                {allowedQuantities.map((quantity) => (
+                  <Badge key={quantity} color="gray" variant="soft">
+                    {quantity}
+                  </Badge>
+                ))}
+              </Flex>
+            </Box>
+          ) : null}
+
+          {additionalItems.length ? (
+            <Box>
+              <Text as="div" size="1" color="gray" weight="bold" mb="2">
+                Additional Data
+              </Text>
+              <QuickDataList data={additionalItems} size="1" />
+            </Box>
+          ) : null}
+        </Flex>
+      ) : (
+        <Text color="gray">No structured price data available</Text>
+      )}
     </Card>
   );
 };
@@ -567,6 +718,122 @@ const formatVariantValue = (value: unknown) => {
   if (typeof value === 'string') return value;
   if (typeof value === 'number' || typeof value === 'boolean') return String(value);
   return JSON.stringify(value);
+};
+
+const knownPriceDataKeys = new Set([
+  'msrp',
+  'caseSize',
+  'maxOrder',
+  'minOrder',
+  'moqUnits',
+  'increments',
+  'allowedQuantities',
+  'excludeFromMinOrderQty',
+]);
+
+const normalizePriceData = (data: unknown): Record<string, unknown> | null => {
+  if (typeof data === 'string') {
+    try {
+      return getRecord(JSON.parse(data));
+    } catch {
+      return null;
+    }
+  }
+
+  return getRecord(data);
+};
+
+const getPriceDataListItem = (
+  data: Record<string, unknown>,
+  key: string,
+  label: string,
+  formatter = formatPriceValue,
+  showMissing = false
+): QuickDataListItem | undefined => {
+  if (!(key in data)) return undefined;
+
+  const value = formatter(data[key]);
+  if (value) {
+    return { label, value };
+  }
+
+  return showMissing ? { label, value: 'Not provided', color: 'gray' } : undefined;
+};
+
+const getNumberArray = (value: unknown): number[] => {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map((item) => {
+      if (typeof item === 'number') return item;
+
+      if (typeof item === 'string') {
+        const parsedValue = Number(item);
+        return Number.isFinite(parsedValue) ? parsedValue : undefined;
+      }
+
+      return undefined;
+    })
+    .filter((item): item is number => item !== undefined);
+};
+
+const formatCurrencyValue = (value: unknown): string | undefined => {
+  const numberValue = getNumberValue(value);
+  if (numberValue !== undefined) {
+    return currencyFormatter(numberValue);
+  }
+
+  return formatPriceValue(value);
+};
+
+const formatMaxOrder = (value: unknown): string | undefined => {
+  const numberValue = getNumberValue(value);
+  if (value == null || numberValue === 0) return 'No maximum';
+
+  return formatUnitCount(value, 'unit');
+};
+
+const formatUnitCount = (value: unknown, unit: string): string | undefined => {
+  const formattedValue = formatPriceValue(value);
+  if (!formattedValue) return undefined;
+
+  return `${formattedValue} ${formattedValue === '1' ? unit : `${unit}s`}`;
+};
+
+const formatYesNo = (value: unknown): string | undefined => {
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+
+  return formatPriceValue(value);
+};
+
+const formatPriceValue = (value: unknown): string | undefined => {
+  if (value == null) return undefined;
+
+  if (Array.isArray(value)) {
+    return value.map(formatPriceValue).filter(Boolean).join(', ') || undefined;
+  }
+
+  if (typeof value === 'string') {
+    const trimmedValue = value.trim();
+    return trimmedValue || undefined;
+  }
+
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return String(value);
+  }
+
+  return JSON.stringify(value);
+};
+
+const getNumberValue = (value: unknown): number | undefined => {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : undefined;
+
+  if (typeof value === 'string') {
+    const parsedValue = Number(value);
+    return Number.isFinite(parsedValue) ? parsedValue : undefined;
+  }
+
+  return undefined;
 };
 
 const knownAlcoholDataKeys = new Set([

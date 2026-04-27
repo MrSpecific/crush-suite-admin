@@ -5,7 +5,11 @@ import { Link } from '@/app/components/Link';
 import { NotFound } from '@/app/components/NotFound';
 import { PageLayout } from '@/app/components/PageLayout';
 import { QuickDataList } from '@/app/components/QuickDataList';
-import { currencyFormatter, currencyFormatterWithDecimals, dateTimeFormatter } from '@/lib/formatters';
+import {
+  currencyFormatter,
+  currencyFormatterWithDecimals,
+  dateTimeFormatter,
+} from '@/lib/formatters';
 import { ProductCategoryBadge } from '@/app/components/ProductCategoryBadge';
 import { ProductCategory } from '@/types/types';
 import { orderStatusMetaData } from '@/lib/metaData';
@@ -98,8 +102,7 @@ export default async function Page({ params }: { params: { id: string } }) {
 
   const shippingAddr = data.shippingAddress as ShopifyAddress | null;
   const billingAddr = data.billingAddress as ShopifyAddress | null;
-  const hasBilling =
-    billingAddr && JSON.stringify(billingAddr) !== JSON.stringify(shippingAddr);
+  const hasBilling = billingAddr && JSON.stringify(billingAddr) !== JSON.stringify(shippingAddr);
 
   const heading = data.platformOrderName ? `Order ${data.platformOrderName}` : `Order #${id}`;
 
@@ -111,7 +114,7 @@ export default async function Page({ params }: { params: { id: string } }) {
             <ExclamationTriangleIcon />
           </Callout.Icon>
           <Callout.Text>
-            <Text as="div" weight="bold" mb="1">
+            <Text as="span" weight="bold" mb="1">
               {data.issues.length} {data.issues.length === 1 ? 'Issue' : 'Issues'} Found
             </Text>
             <ul style={{ paddingLeft: '1rem', margin: 0 }}>
@@ -263,15 +266,11 @@ export default async function Page({ params }: { params: { id: string } }) {
                 data={[
                   {
                     label: 'Bill To',
-                    value: [billingAddr.firstName, billingAddr.lastName]
-                      .filter(Boolean)
-                      .join(' '),
+                    value: [billingAddr.firstName, billingAddr.lastName].filter(Boolean).join(' '),
                   },
                   {
                     label: 'Address',
-                    value: [billingAddr.address1, billingAddr.address2]
-                      .filter(Boolean)
-                      .join(', '),
+                    value: [billingAddr.address1, billingAddr.address2].filter(Boolean).join(', '),
                   },
                   { label: 'City', value: billingAddr.city },
                   { label: 'State', value: billingAddr.province },
