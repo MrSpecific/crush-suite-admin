@@ -37,7 +37,7 @@ export const DataFilter = ({ filters = [] }: { filters?: SelectDataFilter[] }) =
   return (
     <Flex align="end" gap="4" wrap="wrap" mb="4">
       <Form.Root
-        style={{ flex: '1 1 280px', maxWidth: 420 }}
+        style={{ flex: '1 1 280px', maxWidth: 600 }}
         onSubmit={(event) => {
           event.preventDefault();
           const params = new URLSearchParams(searchParams.toString());
@@ -101,7 +101,14 @@ const DataSelectFilter = ({
 
   return (
     <Box style={{ minWidth: 180 }}>
-      <Text as="label" htmlFor={filterId} size="1" weight="bold" mb="1">
+      <Text
+        as="label"
+        htmlFor={filterId}
+        size="1"
+        weight="bold"
+        mb="1"
+        style={{ display: 'block' }}
+      >
         {filter.label}
       </Text>
       <Select.Root
