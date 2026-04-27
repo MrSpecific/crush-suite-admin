@@ -113,8 +113,8 @@ export default async function Page({ params }: { params: { id: string } }) {
           <Callout.Icon>
             <ExclamationTriangleIcon />
           </Callout.Icon>
-          <Callout.Text>
-            <Text as="span" weight="bold" mb="1">
+          <Box>
+            <Text as="div" weight="bold" mb="1">
               {data.issues.length} {data.issues.length === 1 ? 'Issue' : 'Issues'} Found
             </Text>
             <ul style={{ paddingLeft: '1rem', margin: 0 }}>
@@ -122,7 +122,7 @@ export default async function Page({ params }: { params: { id: string } }) {
                 <li key={i}>{issue}</li>
               ))}
             </ul>
-          </Callout.Text>
+          </Box>
         </Callout.Root>
       )}
 
@@ -297,23 +297,25 @@ export default async function Page({ params }: { params: { id: string } }) {
                 <Table.ColumnHeaderCell>Updated</Table.ColumnHeaderCell>
               </Table.Row>
             </Table.Header>
-            {data.Fulfillment.map((fulfillment) => {
-              const fMeta = fulfillmentStatusMeta[fulfillment.status];
-              return (
-                <Table.Row key={fulfillment.id} align="center">
-                  <Table.Cell>{fulfillment.id}</Table.Cell>
-                  <Table.Cell>
-                    <Badge color={fMeta?.color as any} variant="soft">
-                      {fMeta?.label || fulfillment.status}
-                    </Badge>
-                  </Table.Cell>
-                  <Table.Cell>{fulfillment.platformFulfillmentId || '—'}</Table.Cell>
-                  <Table.Cell>{fulfillment.shop}</Table.Cell>
-                  <Table.Cell>{dateTimeFormatter(fulfillment.createdAt)}</Table.Cell>
-                  <Table.Cell>{dateTimeFormatter(fulfillment.updatedAt)}</Table.Cell>
-                </Table.Row>
-              );
-            })}
+            <Table.Body>
+              {data.Fulfillment.map((fulfillment) => {
+                const fMeta = fulfillmentStatusMeta[fulfillment.status];
+                return (
+                  <Table.Row key={fulfillment.id} align="center">
+                    <Table.Cell>{fulfillment.id}</Table.Cell>
+                    <Table.Cell>
+                      <Badge color={fMeta?.color as any} variant="soft">
+                        {fMeta?.label || fulfillment.status}
+                      </Badge>
+                    </Table.Cell>
+                    <Table.Cell>{fulfillment.platformFulfillmentId || '—'}</Table.Cell>
+                    <Table.Cell>{fulfillment.shop}</Table.Cell>
+                    <Table.Cell>{dateTimeFormatter(fulfillment.createdAt)}</Table.Cell>
+                    <Table.Cell>{dateTimeFormatter(fulfillment.updatedAt)}</Table.Cell>
+                  </Table.Row>
+                );
+              })}
+            </Table.Body>
           </Table.Root>
         </Card>
       )}
@@ -333,8 +335,8 @@ export default async function Page({ params }: { params: { id: string } }) {
               </Table.Row>
             </Table.Header>
 
-            {items &&
-              items.map((item: PurchaseItem) => {
+            <Table.Body>
+              {items.map((item: PurchaseItem) => {
                 const product = item.platformVariantId
                   ? productsByVariantId.get(item.platformVariantId)
                   : undefined;
@@ -375,6 +377,7 @@ export default async function Page({ params }: { params: { id: string } }) {
                   </Table.Row>
                 );
               })}
+            </Table.Body>
           </Table.Root>
         </Box>
       </Card>
