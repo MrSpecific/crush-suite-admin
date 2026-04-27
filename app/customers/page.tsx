@@ -6,6 +6,8 @@ import { EditDialog } from '@/app/components/EditDialog';
 import { dateFormatter, dateTimeFormatter, emailFormatter } from '@/lib/formatters';
 import { Pagination } from '@/app/components/Pagination';
 import { queryPagination } from '@/lib/queryPagination';
+import { ButtonLink } from '../components/ButtonLink';
+import { Flex } from '@radix-ui/themes';
 
 const Actions = ({ ...props }) => {
   return (
@@ -41,14 +43,22 @@ export default async function Page({ searchParams }: { searchParams: PageSearchP
     { id: 'lastName', title: 'Last Name' },
     { id: 'email', title: 'Email', formatter: emailFormatter },
     { id: 'shop', title: 'Shop' },
-    { id: 'createdAt', title: 'Created At', formatter: dateFormatter },
-    { id: 'updatedAt', title: 'Updated At', formatter: dateFormatter },
-    { id: 'syncedAt', title: 'Synced At', formatter: dateTimeFormatter },
+    // { id: 'createdAt', title: 'Created At', formatter: dateFormatter },
+    // { id: 'updatedAt', title: 'Updated At', formatter: dateFormatter },
+    // { id: 'syncedAt', title: 'Synced At', formatter: dateTimeFormatter },
     // { id: 'platform', title: 'Platform' },
     { id: 'platformCustomerId', title: 'Platform Customer ID' },
     // { id: 'compliancePartner', title: 'Compliance Partner' },
-    // { type: 'actions', title: 'Actions' },
+    { type: 'actions', title: 'Actions' },
   ];
+
+  const Actions = ({ ...props }) => {
+    return (
+      <Flex gap="2">
+        <ButtonLink href={`/customers/${props.id}`}>View</ButtonLink>
+      </Flex>
+    );
+  };
 
   return (
     <PageLayout heading="Customers">
