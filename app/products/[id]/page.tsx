@@ -3,14 +3,12 @@ import { Badge, Box, Card, Flex, Grid, Heading, ScrollArea, Text } from '@radix-
 import { Link } from '@/app/components/Link';
 import { NotFound } from '@/app/components/NotFound';
 import { PageLayout } from '@/app/components/PageLayout';
-import { QuickDataList, type DataListItem as QuickDataListItem } from '@/app/components/QuickDataList';
-import { ProductCategoryBadge } from '@/app/components/ProductCategoryBadge';
 import {
-  currencyFormatter,
-  dateFormatter,
-  dateTimeFormatter,
-  formatAsUrl,
-} from '@/lib/formatters';
+  QuickDataList,
+  type DataListItem as QuickDataListItem,
+} from '@/app/components/QuickDataList';
+import { ProductCategoryBadge } from '@/app/components/ProductCategoryBadge';
+import { currencyFormatter, dateTimeFormatter, formatAsUrl } from '@/lib/formatters';
 
 export default async function Page({ params }: { params: { id: string } }) {
   const { id } = params;
@@ -35,7 +33,9 @@ export default async function Page({ params }: { params: { id: string } }) {
   return (
     <PageLayout
       heading={data.name}
-      actions={merchant ? [{ label: 'View Merchant', href: `/merchants/${merchant.id}` }] : undefined}
+      actions={
+        merchant ? [{ label: 'View Merchant', href: `/merchants/${merchant.id}` }] : undefined
+      }
     >
       <Grid columns={{ initial: '1', md: '2' }} gap="4">
         <Card>
@@ -100,54 +100,58 @@ export default async function Page({ params }: { params: { id: string } }) {
             Merchant
           </Heading>
           <QuickDataList
-            data={[
-              merchant
-                ? {
-                    label: 'Merchant',
-                    children: <Link href={`/merchants/${merchant.id}`}>{merchant.compliancePartnerAccountName || merchant.shop}</Link>,
-                  }
-                : undefined,
-              merchant
-                ? {
-                    label: 'Shop',
-                    value: merchant.shop,
-                    linkTo: formatAsUrl(merchant.shop),
-                    target: '_blank',
-                  }
-                : undefined,
-              merchant
-                ? {
-                    label: 'Status',
-                    value: merchant.status,
-                    badge: true,
-                  }
-                : undefined,
-              merchant
-                ? { label: 'Billing Plan', value: merchant.billingPlan?.name }
-                : undefined,
-              merchant
-                ? { label: 'Platform Plan', value: merchant.platformPlanName }
-                : undefined,
-              merchant
-                ? {
-                    label: 'Platform Email',
-                    value: merchant.platformEmail,
-                    linkTo: merchant.platformEmail ? `mailto:${merchant.platformEmail}` : undefined,
-                  }
-                : undefined,
-              merchant
-                ? {
-                    label: 'Compliance Partner Account',
-                    value: merchant.compliancePartnerAccountName,
-                  }
-                : undefined,
-              merchant
-                ? { label: 'Merchant Created', value: dateTimeFormatter(merchant.createdAt) }
-                : undefined,
-              merchant
-                ? { label: 'Merchant Updated', value: dateTimeFormatter(merchant.updatedAt) }
-                : undefined,
-            ].filter(Boolean) as QuickDataListItem[]}
+            data={
+              [
+                merchant
+                  ? {
+                      label: 'Merchant',
+                      children: (
+                        <Link href={`/merchants/${merchant.id}`}>
+                          {merchant.compliancePartnerAccountName || merchant.shop}
+                        </Link>
+                      ),
+                    }
+                  : undefined,
+                merchant
+                  ? {
+                      label: 'Shop',
+                      value: merchant.shop,
+                      linkTo: formatAsUrl(merchant.shop),
+                      target: '_blank',
+                    }
+                  : undefined,
+                merchant
+                  ? {
+                      label: 'Status',
+                      value: merchant.status,
+                      badge: true,
+                    }
+                  : undefined,
+                merchant ? { label: 'Billing Plan', value: merchant.billingPlan?.name } : undefined,
+                merchant ? { label: 'Platform Plan', value: merchant.platformPlanName } : undefined,
+                merchant
+                  ? {
+                      label: 'Platform Email',
+                      value: merchant.platformEmail,
+                      linkTo: merchant.platformEmail
+                        ? `mailto:${merchant.platformEmail}`
+                        : undefined,
+                    }
+                  : undefined,
+                merchant
+                  ? {
+                      label: 'Compliance Partner Account',
+                      value: merchant.compliancePartnerAccountName,
+                    }
+                  : undefined,
+                merchant
+                  ? { label: 'Merchant Created', value: dateTimeFormatter(merchant.createdAt) }
+                  : undefined,
+                merchant
+                  ? { label: 'Merchant Updated', value: dateTimeFormatter(merchant.updatedAt) }
+                  : undefined,
+              ].filter(Boolean) as QuickDataListItem[]
+            }
           />
         </Card>
       </Grid>
@@ -192,7 +196,12 @@ export default async function Page({ params }: { params: { id: string } }) {
             data={[
               { label: 'Platform', value: data.platform, badge: true, color: 'gray' },
               { label: 'Shop', value: data.shop, linkTo: formatAsUrl(data.shop), target: '_blank' },
-              { label: 'Compliance Partner', value: data.compliancePartner, badge: true, color: 'blue' },
+              {
+                label: 'Compliance Partner',
+                value: data.compliancePartner,
+                badge: true,
+                color: 'blue',
+              },
               { label: 'Compliance Partner ID', value: data.compliancePartnerId, clipboard: true },
               {
                 label: 'Compliance Product ID',
@@ -209,7 +218,10 @@ export default async function Page({ params }: { params: { id: string } }) {
               },
               { label: 'Created At', value: dateTimeFormatter(data.createdAt) },
               { label: 'Updated At', value: dateTimeFormatter(data.updatedAt) },
-              { label: 'Synced At', value: data.syncedAt ? dateTimeFormatter(data.syncedAt) : 'Never' },
+              {
+                label: 'Synced At',
+                value: data.syncedAt ? dateTimeFormatter(data.syncedAt) : 'Never',
+              },
             ]}
           />
         </Card>
@@ -218,7 +230,7 @@ export default async function Page({ params }: { params: { id: string } }) {
       <Grid columns={{ initial: '1', md: '2' }} gap="4" mt="4">
         <VariantOptionsCard title="Variant Options" data={data.productVariantOptions} />
         <JsonCard title="All Variant Options" data={data.productVariantAllOptions} />
-        <JsonCard title="Alcohol Data" data={data.alcoholData} />
+        <AlcoholDataCard data={data.alcoholData} />
         <JsonCard title="No-Sale States Data" data={data.noSaleStatesData} />
         <JsonCard title="Price Data" data={data.priceData} />
       </Grid>
@@ -269,15 +281,187 @@ const VariantOptionsCard = ({ title, data }: { title: string; data: unknown }) =
   );
 };
 
+const AlcoholDataCard = ({ data }: { data: unknown }) => {
+  const alcoholData = normalizeAlcoholData(data);
+
+  if (!alcoholData) {
+    return (
+      <Card>
+        <Heading as="h2" size="3" mb="3">
+          Alcohol Data
+        </Heading>
+        <Text color="gray">No data available</Text>
+      </Card>
+    );
+  }
+
+  const bottleSize = getRecord(alcoholData.bottleSize);
+  const bottleDisplay = getBottleDisplay(bottleSize);
+  const bottleVolume = getBottleVolume(bottleSize);
+  const winemakerNote = formatMultilineText(alcoholData.winemakerNote);
+
+  const summaryItems = [
+    { label: 'ABV', value: formatAbv(alcoholData.abv) },
+    { label: 'Vintage', value: formatAlcoholValue(alcoholData.vintage) },
+    { label: 'Type', value: formatAlcoholValue(alcoholData.type) },
+    { label: 'Bottle', value: bottleDisplay },
+  ].filter(hasDisplayValue);
+
+  const wineDetails = [
+    getAlcoholDataListItem(alcoholData, 'type', 'Type'),
+    getAlcoholDataListItem(alcoholData, 'varietal', 'Varietal'),
+    getAlcoholDataListItem(alcoholData, 'vintage', 'Vintage'),
+    getAlcoholDataListItem(alcoholData, 'winemaker', 'Winemaker'),
+    getAlcoholDataListItem(alcoholData, 'bottlingDate', 'Bottling Date'),
+  ].filter(Boolean) as QuickDataListItem[];
+
+  const chemistryAndPackage = [
+    getAlcoholDataListItem(alcoholData, 'abv', 'ABV', formatAbv),
+    getAlcoholDataListItem(alcoholData, 'ph', 'pH', formatAlcoholValue, true),
+    getAlcoholDataListItem(
+      alcoholData,
+      'titratableAcid',
+      'Titratable Acid',
+      formatAlcoholValue,
+      true
+    ),
+    bottleDisplay ? { label: 'Bottle Size', value: bottleDisplay } : undefined,
+    bottleVolume ? { label: 'Bottle Volume', value: bottleVolume } : undefined,
+    getBottleDataListItem(bottleSize, 'units', 'Bottle Units'),
+    getBottleDataListItem(bottleSize, 'id', 'Bottle Size ID', 'code'),
+  ].filter(Boolean) as QuickDataListItem[];
+
+  const additionalItems = Object.entries(alcoholData)
+    .filter(([key]) => !knownAlcoholDataKeys.has(key))
+    .map(([key, value]) => {
+      const formattedValue = formatAlcoholValue(value);
+
+      return formattedValue
+        ? {
+            label: humanizeOptionLabel(key),
+            value: formattedValue,
+          }
+        : undefined;
+    })
+    .filter(Boolean) as QuickDataListItem[];
+
+  const hasStructuredData =
+    summaryItems.length ||
+    wineDetails.length ||
+    chemistryAndPackage.length ||
+    additionalItems.length ||
+    winemakerNote;
+
+  return (
+    <Card>
+      <Flex justify="between" align="start" gap="3" mb="3" wrap="wrap">
+        <Heading as="h2" size="3">
+          Alcohol Data
+        </Heading>
+        <Flex gap="2" wrap="wrap">
+          {formatAlcoholValue(alcoholData.type) && (
+            <Badge color="pink" variant="soft">
+              {formatAlcoholValue(alcoholData.type)}
+            </Badge>
+          )}
+          {formatAlcoholValue(alcoholData.vintage) && (
+            <Badge color="gray" variant="soft">
+              {formatAlcoholValue(alcoholData.vintage)}
+            </Badge>
+          )}
+        </Flex>
+      </Flex>
+
+      {hasStructuredData ? (
+        <Flex direction="column" gap="4">
+          {summaryItems.length ? (
+            <Grid columns={{ initial: '2', md: '4' }} gap="2">
+              {summaryItems.map((item) => (
+                <Box
+                  key={item.label}
+                  p="3"
+                  style={{
+                    backgroundColor: 'var(--gray-2)',
+                    borderRadius: 'var(--radius-3)',
+                  }}
+                >
+                  <Text as="div" size="1" color="gray" mb="1">
+                    {item.label}
+                  </Text>
+                  <Text as="div" size="3" weight="bold">
+                    {item.value}
+                  </Text>
+                </Box>
+              ))}
+            </Grid>
+          ) : null}
+
+          <Grid columns={{ initial: '1', md: '2' }} gap="4">
+            {wineDetails.length ? (
+              <Box>
+                <Text as="div" size="1" color="gray" weight="bold" mb="2">
+                  Wine Details
+                </Text>
+                <QuickDataList data={wineDetails} size="1" />
+              </Box>
+            ) : null}
+
+            {chemistryAndPackage.length ? (
+              <Box>
+                <Text as="div" size="1" color="gray" weight="bold" mb="2">
+                  Chemistry & Package
+                </Text>
+                <QuickDataList data={chemistryAndPackage} size="1" />
+              </Box>
+            ) : null}
+          </Grid>
+
+          {winemakerNote ? (
+            <Box>
+              <Text as="div" size="1" color="gray" weight="bold" mb="2">
+                Winemaker Note
+              </Text>
+              <Box
+                p="3"
+                style={{
+                  backgroundColor: 'var(--gray-2)',
+                  borderRadius: 'var(--radius-3)',
+                }}
+              >
+                <Text as="p" size="2" style={{ margin: 0, whiteSpace: 'pre-line' }}>
+                  {winemakerNote}
+                </Text>
+              </Box>
+            </Box>
+          ) : null}
+
+          {additionalItems.length ? (
+            <Box>
+              <Text as="div" size="1" color="gray" weight="bold" mb="2">
+                Additional Data
+              </Text>
+              <QuickDataList data={additionalItems} size="1" />
+            </Box>
+          ) : null}
+        </Flex>
+      ) : (
+        <Text color="gray">No structured alcohol data available</Text>
+      )}
+    </Card>
+  );
+};
+
 const normalizeVariantOptions = (
   data: unknown
 ): { label: string; value?: string; values?: string[] }[] => {
   if (!data) return [];
 
   if (Array.isArray(data)) {
-    return data
-      .map((item, index) => normalizeVariantOptionItem(item, index))
-      .filter(Boolean) as { label: string; value?: string; values?: string[] }[];
+    return data.map((item, index) => normalizeVariantOptionItem(item, index)).filter(Boolean) as {
+      label: string;
+      value?: string;
+      values?: string[];
+    }[];
   }
 
   if (typeof data === 'object') {
@@ -384,6 +568,117 @@ const formatVariantValue = (value: unknown) => {
   if (typeof value === 'number' || typeof value === 'boolean') return String(value);
   return JSON.stringify(value);
 };
+
+const knownAlcoholDataKeys = new Set([
+  'ph',
+  'abv',
+  'type',
+  'vintage',
+  'varietal',
+  'winemaker',
+  'bottleSize',
+  'bottlingDate',
+  'winemakerNote',
+  'titratableAcid',
+]);
+
+const normalizeAlcoholData = (data: unknown): Record<string, unknown> | null => {
+  if (typeof data === 'string') {
+    try {
+      return getRecord(JSON.parse(data));
+    } catch {
+      return null;
+    }
+  }
+
+  return getRecord(data);
+};
+
+const getRecord = (value: unknown): Record<string, unknown> | null => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+
+  return value as Record<string, unknown>;
+};
+
+const getAlcoholDataListItem = (
+  data: Record<string, unknown>,
+  key: string,
+  label: string,
+  formatter = formatAlcoholValue,
+  showMissing = false
+): QuickDataListItem | undefined => {
+  if (!(key in data)) return undefined;
+
+  const value = formatter(data[key]);
+  if (value) {
+    return { label, value };
+  }
+
+  return showMissing ? { label, value: 'Not provided', color: 'gray' } : undefined;
+};
+
+const getBottleDataListItem = (
+  bottleSize: Record<string, unknown> | null,
+  key: string,
+  label: string,
+  as?: QuickDataListItem['as']
+): QuickDataListItem | undefined => {
+  if (!bottleSize || !(key in bottleSize)) return undefined;
+
+  const value = formatAlcoholValue(bottleSize[key]);
+  return value ? { label, value, as } : undefined;
+};
+
+const getBottleDisplay = (bottleSize: Record<string, unknown> | null) => {
+  if (!bottleSize) return undefined;
+
+  return (
+    formatAlcoholValue(bottleSize.desc) ||
+    formatAlcoholValue(bottleSize.volumeDisplay) ||
+    getBottleVolume(bottleSize)
+  );
+};
+
+const getBottleVolume = (bottleSize: Record<string, unknown> | null) => {
+  if (!bottleSize) return undefined;
+
+  const volumeDisplay = formatAlcoholValue(bottleSize.volumeDisplay);
+  if (volumeDisplay) return volumeDisplay;
+
+  const ml = formatAlcoholValue(bottleSize.ml);
+  return ml ? `${ml} mL` : undefined;
+};
+
+const formatAbv = (value: unknown) => {
+  const formattedValue = formatAlcoholValue(value);
+  if (!formattedValue) return undefined;
+
+  return formattedValue.includes('%') ? formattedValue : `${formattedValue}%`;
+};
+
+const formatAlcoholValue = (value: unknown) => {
+  if (value == null) return undefined;
+
+  if (typeof value === 'string') {
+    const trimmedValue = value.trim();
+    return trimmedValue || undefined;
+  }
+
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return String(value);
+  }
+
+  return JSON.stringify(value);
+};
+
+const formatMultilineText = (value: unknown) => {
+  const formattedValue = formatAlcoholValue(value);
+  return formattedValue?.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+};
+
+const hasDisplayValue = (
+  item: { label: string; value?: string } | undefined
+): item is { label: string; value: string } => Boolean(item?.value);
 
 const JsonCard = ({ title, data }: { title: string; data: unknown }) => {
   return (
