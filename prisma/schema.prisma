@@ -182,6 +182,7 @@ model Customer {
   compliancePartnerCustomerId String?
   merchantId                  Int
   dob                         DateTime?
+  dobEncrypted                String?
   email                       String
   phoneNumber                 String?
   usesPhoneNumberAsPrimary    Boolean           @default(false)
@@ -231,11 +232,31 @@ model Order {
   transactionYear          String? // 4 digit year as string
   platformProductIds       String[]          @default([])
   updatedCount             Int               @default(0)
+  processingLog            Json? // structured array of { ts, event, detail } entries from order processing
   customerId               Int
   customer                 Customer          @relation(fields: [customerId], references: [id])
   merchantId               Int
   merchant                 Merchant          @relation(fields: [merchantId], references: [id])
   Fulfillment              Fulfillment[]
+}
+
+/// Captures every incoming order webhook before any business logic runs.
+/// No FK to Order — the log is written first and linked after processing.
+/// Pruned by the Reaper: successful logs after 7 days, failed after 90.
+model OrderWebhookLog {
+  id              Int      @id @default(autoincrement())
+  createdAt       DateTime @default(now())
+  shop            String
+  platformOrderId String
+  topic           String
+  payload         Json
+  status          String   @default("RECEIVED")
+  orderId         Int?
+  errors          String[] @default([])
+
+  @@index([shop])
+  @@index([platformOrderId])
+  @@index([status, createdAt])
 }
 
 model Fulfillment {
