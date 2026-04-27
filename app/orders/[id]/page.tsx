@@ -10,6 +10,12 @@ import {
   currencyFormatterWithDecimals,
   dateTimeFormatter,
 } from '@/lib/formatters';
+import {
+  getShopifyAdminOrderUrl,
+  getShopifyOrderByPlatformOrderId,
+  getShopifyOrderSourceLabel,
+  type ShopifyOrder,
+} from '@/lib/shopify';
 import { ProductCategoryBadge } from '@/app/components/ProductCategoryBadge';
 import { ProductCategory } from '@/types/types';
 import { orderStatusMetaData } from '@/lib/metaData';
@@ -109,6 +115,11 @@ export default async function Page({ params }: { params: { id: string } }) {
   const shippingAddr = data.shippingAddress as ShopifyAddress | null;
   const billingAddr = data.billingAddress as ShopifyAddress | null;
   const hasBilling = billingAddr && JSON.stringify(billingAddr) !== JSON.stringify(shippingAddr);
+  const shopifyOrderLookup = await getShopifyOrderLookup({
+    shop: data.merchant?.shop,
+    accessToken: data.merchant?.accessToken,
+    platformOrderId: data.platformOrderId,
+  });
 
   const heading = data.platformOrderName ? `Order ${data.platformOrderName}` : `Order #${id}`;
 
@@ -174,6 +185,8 @@ export default async function Page({ params }: { params: { id: string } }) {
         </Card>
 
         <Flex direction="column" gap="4">
+          <ShopifyOrderCard shop={data.merchant?.shop} lookup={shopifyOrderLookup} />
+
           <Card>
             <Heading size="3" mb="3">
               Customer & Merchant
@@ -411,3 +424,142 @@ export default async function Page({ params }: { params: { id: string } }) {
     </PageLayout>
   );
 }
+
+type ShopifyOrderLookup = {
+  order: ShopifyOrder | null;
+  error?: string;
+};
+
+const ShopifyOrderCard = ({
+  lookup,
+  shop,
+}: {
+  lookup: ShopifyOrderLookup;
+  shop?: string | null;
+}) => {
+  const { order, error } = lookup;
+  const sourceLabel = getShopifyOrderSourceLabel(order);
+  const currentTotal = order?.currentTotalPriceSet?.shopMoney || order?.totalPriceSet?.shopMoney;
+
+  return (
+    <Card style={{ borderTop: '3px solid #95BF47' }}>
+      <Flex justify="between" align="center" gap="3" mb="3">
+        <img
+          src="/shopify_logo_whitebg.svg"
+          alt="Shopify"
+          style={{ height: '26px', display: 'block' }}
+        />
+        {order ? (
+          <Badge style={{ backgroundColor: '#e8f5d9', color: '#3d6b17' }} variant="soft">
+            Live
+          </Badge>
+        ) : (
+          <Badge color="gray" variant="soft">
+            Unavailable
+          </Badge>
+        )}
+      </Flex>
+
+      {order ? (
+        <QuickDataList
+          data={[
+            {
+              label: 'Admin',
+              value: order.name,
+              linkTo:
+                shop && order.legacyResourceId
+                  ? getShopifyAdminOrderUrl(shop, order.legacyResourceId)
+                  : undefined,
+              target: '_blank',
+            },
+            { label: 'Source', value: sourceLabel, bold: true },
+            { label: 'Source Name', value: order.sourceName, as: 'code' },
+            { label: 'Source Identifier', value: order.sourceIdentifier, as: 'code' },
+            { label: 'Created By App', value: order.app?.name },
+            { label: 'Publication', value: order.publication?.name },
+            { label: 'Channel App', value: order.channelInformation?.app.title },
+            {
+              label: 'Channel',
+              value: order.channelInformation?.channelDefinition?.channelName,
+            },
+            {
+              label: 'Subchannel',
+              value: order.channelInformation?.channelDefinition?.subChannelName,
+            },
+            {
+              label: 'Marketplace',
+              value:
+                order.channelInformation?.channelDefinition?.isMarketplace === undefined
+                  ? undefined
+                  : order.channelInformation.channelDefinition.isMarketplace
+                    ? 'Yes'
+                    : 'No',
+            },
+            { label: 'Financial Status', value: order.displayFinancialStatus },
+            { label: 'Fulfillment Status', value: order.displayFulfillmentStatus },
+            { label: 'Current Total', value: formatShopifyMoney(currentTotal) },
+            { label: 'Created At', value: formatShopifyDateTime(order.createdAt) },
+            { label: 'Updated At', value: formatShopifyDateTime(order.updatedAt) },
+          ]}
+        />
+      ) : (
+        <Text color="gray">{error || 'Shopify order information could not be loaded.'}</Text>
+      )}
+    </Card>
+  );
+};
+
+const getShopifyOrderLookup = async ({
+  shop,
+  accessToken,
+  platformOrderId,
+}: {
+  shop?: string | null;
+  accessToken?: string | null;
+  platformOrderId?: string | null;
+}): Promise<ShopifyOrderLookup> => {
+  if (!platformOrderId) {
+    return { order: null, error: 'No Shopify order ID is stored for this order.' };
+  }
+
+  if (!shop) {
+    return { order: null, error: 'No Shopify shop is stored for this order.' };
+  }
+
+  if (!accessToken) {
+    return { order: null, error: 'No Shopify access token is stored for this merchant.' };
+  }
+
+  try {
+    const order = await getShopifyOrderByPlatformOrderId({
+      shop,
+      accessToken,
+      platformOrderId,
+    });
+
+    return order
+      ? { order }
+      : {
+          order: null,
+          error:
+            'Shopify did not return this order. It may be older than the accessible order window or unavailable to the app.',
+        };
+  } catch (error) {
+    return {
+      order: null,
+      error: error instanceof Error ? error.message : 'Unable to load Shopify order information.',
+    };
+  }
+};
+
+const formatShopifyMoney = (value?: { amount: string; currencyCode: string } | null) => {
+  if (!value) return undefined;
+
+  return `${value.amount} ${value.currencyCode}`;
+};
+
+const formatShopifyDateTime = (value?: string | null) => {
+  if (!value) return undefined;
+
+  return dateTimeFormatter(new Date(value));
+};
