@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   Badge,
@@ -12,6 +12,7 @@ import {
   ScrollArea,
   Select,
   Separator,
+  Spinner,
   VisuallyHidden,
 } from '@radix-ui/themes';
 import { UserCard } from './UserCard';
@@ -34,11 +35,38 @@ const modeRoots: Record<AppMode, string> = {
   seats: '/seats',
 };
 
+const modeLabels: Record<AppMode, string> = {
+  compliance: 'Compliance',
+  clubs: 'Clubs',
+  seats: 'Seats',
+};
+
 export const Sidebar = ({ user }: { user?: SessionUser }) => {
   const environment = getEnvironment();
   const pathname = usePathname();
   const router = useRouter();
   const mode = getModeFromPathname(pathname);
+  const [pendingMode, setPendingMode] = useState<AppMode | null>(null);
+  const [isModeTransitionPending, startModeTransition] = useTransition();
+  const selectedMode = pendingMode ?? mode;
+  const isModeLoading = pendingMode !== null || isModeTransitionPending;
+
+  useEffect(() => {
+    if (pendingMode === mode) {
+      setPendingMode(null);
+    }
+  }, [mode, pendingMode]);
+
+  const handleModeChange = (value: string) => {
+    const nextMode = value as AppMode;
+
+    if (nextMode === mode) return;
+
+    setPendingMode(nextMode);
+    startModeTransition(() => {
+      router.push(modeRoots[nextMode]);
+    });
+  };
 
   if (!user) return null;
 
@@ -72,16 +100,24 @@ export const Sidebar = ({ user }: { user?: SessionUser }) => {
             </Badge>
           </Flex>
           <Box pl="1" pt="2" pr="6" pb="4">
-            <Logo />
+            <Link href="/" style={{ display: 'block' }}>
+              <Logo />
+            </Link>
           </Box>
           <VisuallyHidden>Crush Suite Admin</VisuallyHidden>
         </Heading>
         <Select.Root
           size="1"
-          value={mode}
-          onValueChange={(value) => router.push(modeRoots[value as AppMode])}
+          value={selectedMode}
+          onValueChange={handleModeChange}
+          disabled={isModeLoading}
         >
-          <Select.Trigger style={{ width: '100%' }} mb="3" />
+          <Select.Trigger style={{ width: '100%' }} mb="3">
+            <Flex align="center" gap="2">
+              {isModeLoading && <Spinner size="1" />}
+              <span>{modeLabels[selectedMode]}</span>
+            </Flex>
+          </Select.Trigger>
           <Select.Content>
             <Select.Item value="compliance">Compliance</Select.Item>
             <Select.Item value="clubs">Clubs</Select.Item>
