@@ -21,8 +21,8 @@ const getOperationStatus = (op: {
   return { label: 'Pending', color: 'gray' };
 };
 
-const MerchantActions = ({ merchantId }: { merchantId: number }) => (
-  <ButtonLink href={`/merchants/${merchantId}`}>View Merchant</ButtonLink>
+const Actions = ({ id }: { id: string }) => (
+  <ButtonLink href={`/bulk-operations/${id}`}>View</ButtonLink>
 );
 
 export default async function Page({ searchParams }: { searchParams: PageSearchParams }) {
@@ -59,6 +59,7 @@ export default async function Page({ searchParams }: { searchParams: PageSearchP
   ];
 
   const headers = [
+    // { type: 'data', title: 'Data' },
     { id: 'shop', title: 'Shop' },
     {
       id: 'merchant',
@@ -73,7 +74,11 @@ export default async function Page({ searchParams }: { searchParams: PageSearchP
       title: 'Status',
       formatter: (_: unknown, row: any) => {
         const { label, color } = getOperationStatus(row);
-        return <Badge color={color} variant="soft">{label}</Badge>;
+        return (
+          <Badge color={color} variant="soft">
+            {label}
+          </Badge>
+        );
       },
     },
     { id: 'createdAt', title: 'Created', formatter: dateTimeFormatter },
@@ -98,7 +103,7 @@ export default async function Page({ searchParams }: { searchParams: PageSearchP
   return (
     <PageLayout heading="Bulk Operations">
       <DataFilter filters={filters} />
-      <DataTable headers={headers} data={operations} Actions={MerchantActions} />
+      <DataTable headers={headers} data={operations} Actions={Actions} />
       <Pagination count={count} />
     </PageLayout>
   );
