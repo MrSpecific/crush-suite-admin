@@ -35,6 +35,7 @@ export default async function Page({ searchParams }: { searchParams: PageSearchP
   const data = await prisma.product.findMany({
     ...queryPagination({ page, take: productsTake, count }),
     where,
+    orderBy: { createdAt: 'desc' },
   });
   type DataHeaders = QueryToHeader<typeof data>[];
 
