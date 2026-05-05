@@ -5,6 +5,7 @@ import { DataTable } from '@/app/components/DataTable';
 import { NotFound } from '@/app/components/NotFound';
 import { Badge, Box, Card, Flex, Grid, Heading, Text } from '@radix-ui/themes';
 import { dateFormatter } from '@/lib/formatters';
+import { ButtonLink } from '@/app/components/ButtonLink';
 import type { RadixColor } from '@/types/radix-ui';
 
 const clubStatusColor: Record<string, RadixColor> = {
@@ -88,6 +89,12 @@ export default async function Page({
     return acc;
   }, {});
 
+  const releaseBasePath = `/clubs/merchants/${merchantId}/clubs/${clubId}/releases`;
+
+  const ReleaseActions = ({ id }: { id: string }) => (
+    <ButtonLink href={`${releaseBasePath}/${id}`}>View</ButtonLink>
+  );
+
   const releaseHeaders = [
     { id: 'name', title: 'Name' },
     {
@@ -100,6 +107,7 @@ export default async function Page({
     { id: 'releaseDate', title: 'Release Date', formatter: dateFormatter },
     { id: 'publishDate', title: 'Opens', formatter: dateFormatter },
     { id: 'customizationDeadline', title: 'Closes', formatter: dateFormatter },
+    { type: 'actions' as const, title: 'Actions' },
   ];
 
   return (
@@ -209,7 +217,7 @@ export default async function Page({
           Recent Releases
         </Heading>
         {club.Release.length > 0 ? (
-          <DataTable headers={releaseHeaders} data={club.Release} />
+          <DataTable headers={releaseHeaders} data={club.Release} Actions={ReleaseActions} />
         ) : (
           <Text color="gray" size="2">
             No releases yet.
