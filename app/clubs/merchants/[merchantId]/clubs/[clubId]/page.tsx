@@ -4,15 +4,9 @@ import { QuickDataList } from '@/app/components/QuickDataList';
 import { DataTable } from '@/app/components/DataTable';
 import { NotFound } from '@/app/components/NotFound';
 import { Badge, Box, Card, Flex, Grid, Heading, Text } from '@radix-ui/themes';
-import { dateFormatter } from '@/lib/formatters';
+import { clubStatusFormatter, clubTypeFormatter, dateFormatter } from '@/lib/formatters';
 import { ButtonLink } from '@/app/components/ButtonLink';
 import type { RadixColor } from '@/types/radix-ui';
-
-const clubStatusColor: Record<string, RadixColor> = {
-  draft: 'gray',
-  published: 'green',
-  archived: 'orange',
-};
 
 const releaseStatusColor: Record<string, RadixColor> = {
   draft: 'gray',
@@ -132,11 +126,9 @@ export default async function Page({
             data={[
               {
                 label: 'Status',
-                children: (
-                  <Badge color={clubStatusColor[club.status] ?? 'gray'}>{club.status}</Badge>
-                ),
+                children: clubStatusFormatter(club.status),
               },
-              { label: 'Type', value: club.clubType.replace('_', ' ') },
+              { label: 'Type', children: clubTypeFormatter(club.clubType) },
               { label: 'Release Type', value: club.releaseType },
               { label: 'Timezone', value: club.timezone.replace(/_/g, '/') },
               { label: 'Handle', value: club.platformHandle },

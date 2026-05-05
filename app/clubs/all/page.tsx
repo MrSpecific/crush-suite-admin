@@ -3,16 +3,8 @@ import { PageLayout } from '@/app/components/PageLayout';
 import { DataTable } from '@/app/components/DataTable';
 import { Pagination } from '@/app/components/Pagination';
 import { queryPagination } from '@/lib/queryPagination';
-import { dateFormatter } from '@/lib/formatters';
-import { Badge } from '@radix-ui/themes';
-import type { RadixColor } from '@/types/radix-ui';
+import { clubStatusFormatter, clubTypeFormatter, dateFormatter } from '@/lib/formatters';
 import { ButtonLink } from '@/app/components/ButtonLink';
-
-const clubStatusColor: Record<string, RadixColor> = {
-  draft: 'gray',
-  published: 'green',
-  archived: 'orange',
-};
 
 const Actions = ({ id, merchantId }: { id: string; merchantId: number }) => (
   <ButtonLink href={`/clubs/merchants/${merchantId}/clubs/${id}`}>View</ButtonLink>
@@ -49,11 +41,9 @@ export default async function Page({ searchParams }: { searchParams: PageSearchP
     {
       id: 'status',
       title: 'Status',
-      formatter: (value: string) => (
-        <Badge color={clubStatusColor[value] ?? 'gray'}>{value}</Badge>
-      ),
+      formatter: clubStatusFormatter,
     },
-    { id: 'clubType', title: 'Type' },
+    { id: 'clubType', title: 'Type', formatter: clubTypeFormatter },
     {
       id: 'membershipPrice',
       title: 'Price',

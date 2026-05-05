@@ -163,8 +163,14 @@ const ComplianceNav = () => (
 
 const ClubsNav = () => (
   <>
-    <NavItem href="/clubs/merchants">Merchants</NavItem>
     <NavItem href="/clubs/all">All Clubs</NavItem>
+    <NavItem href="/clubs/merchants">Merchants</NavItem>
+    <NavItem href="/clubs/members">Members</NavItem>
+    <Separator size="4" />
+    <NavItem href="/clubs/billing-plans">Billing Plans</NavItem>
+    <NavItem href="/clubs/migrations">Migrations</NavItem>
+    <NavItem href="/clubs/gdpr">GDPR</NavItem>
+    <NavItem href="/clubs/feature-flags">Feature Flags</NavItem>
   </>
 );
 

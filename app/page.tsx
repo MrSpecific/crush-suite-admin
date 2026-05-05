@@ -4,6 +4,7 @@ import { Badge, Box, Card, Flex, Grid, Heading, Separator, Text } from '@radix-u
 import { Link } from '@/app/components/Link';
 import { ButtonLink } from '@/app/components/ButtonLink';
 import { dateFormatter } from '@/lib/formatters';
+import { clubStatusMetaData } from '@/lib/metaData';
 import type { RadixColor } from '@/types/radix-ui';
 
 export default async function Home() {
@@ -175,7 +176,7 @@ export default async function Home() {
                   primary={c.name}
                   secondary={c.merchant.platformShopName ?? c.merchant.shop}
                   date={c.createdAt}
-                  status={c.status}
+                  status={clubStatusLabel(c.status)}
                   statusColor={clubStatusColor(c.status)}
                 />
               ))}
@@ -285,10 +286,9 @@ const merchantStatusColor = (status: string): RadixColor => {
 };
 
 const clubStatusColor = (status: string): RadixColor => {
-  const map: Record<string, RadixColor> = {
-    published: 'green',
-    draft: 'gray',
-    archived: 'orange',
-  };
-  return map[status] ?? 'gray';
+  return clubStatusMetaData[status as keyof typeof clubStatusMetaData]?.color ?? 'gray';
+};
+
+const clubStatusLabel = (status: string): string => {
+  return clubStatusMetaData[status as keyof typeof clubStatusMetaData]?.label ?? status;
 };

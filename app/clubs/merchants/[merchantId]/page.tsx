@@ -4,7 +4,7 @@ import { QuickDataList } from '@/app/components/QuickDataList';
 import { DataTable } from '@/app/components/DataTable';
 import { NotFound } from '@/app/components/NotFound';
 import { Badge, Box, Card, Flex, Grid, Heading } from '@radix-ui/themes';
-import { dateFormatter } from '@/lib/formatters';
+import { clubStatusFormatter, clubTypeFormatter, dateFormatter } from '@/lib/formatters';
 import type { RadixColor } from '@/types/radix-ui';
 import { ButtonLink } from '@/app/components/ButtonLink';
 
@@ -14,12 +14,6 @@ const merchantStatusOptions: { value: string; label: string; color: RadixColor }
   { value: 'REMOVED', label: 'Removed', color: 'gray' },
   { value: 'ERROR', label: 'Error', color: 'red' },
 ];
-
-const clubStatusColor: Record<string, RadixColor> = {
-  draft: 'gray',
-  published: 'green',
-  archived: 'orange',
-};
 
 const ClubActions = ({ id, merchantId }: { id: string; merchantId: number }) => (
   <ButtonLink href={`/clubs/merchants/${merchantId}/clubs/${id}`}>View</ButtonLink>
@@ -73,11 +67,9 @@ export default async function Page({ params }: { params: { merchantId: string } 
     {
       id: 'status',
       title: 'Status',
-      formatter: (value: string) => (
-        <Badge color={clubStatusColor[value] ?? 'gray'}>{value}</Badge>
-      ),
+      formatter: clubStatusFormatter,
     },
-    { id: 'clubType', title: 'Type' },
+    { id: 'clubType', title: 'Type', formatter: clubTypeFormatter },
     {
       id: 'membershipPrice',
       title: 'Membership Price',

@@ -1,7 +1,7 @@
 import { Link } from '@/app/components/Link';
 import { Box, Text, Button, Dialog, Flex, IconButton, Badge } from '@radix-ui/themes';
 import { ExclamationTriangleIcon } from '@radix-ui/react-icons';
-import { orderStatusMetaData } from './metaData';
+import { clubStatusMetaData, clubTypeMetaData, orderStatusMetaData } from './metaData';
 import { RadixColor } from '@/types/radix-ui';
 
 export const dateFormatter = (value: Date) => (value ? value.toLocaleDateString() : '');
@@ -114,6 +114,28 @@ export const orderStatusFormatter = (value: string) => {
   return (
     <Badge color={color} variant="soft">
       {status ? status.label : value}
+    </Badge>
+  );
+};
+
+export const clubTypeFormatter = (value: string) => {
+  const clubType = clubTypeMetaData[value as keyof typeof clubTypeMetaData];
+  const color: RadixColor = clubType ? clubType.color : 'gray';
+
+  return (
+    <Badge color={color} variant="soft">
+      {clubType ? clubType.label : value.replace(/_/g, ' ')}
+    </Badge>
+  );
+};
+
+export const clubStatusFormatter = (value: string) => {
+  const clubStatus = clubStatusMetaData[value as keyof typeof clubStatusMetaData];
+  const color: RadixColor = clubStatus ? clubStatus.color : 'gray';
+
+  return (
+    <Badge color={color} variant="soft">
+      {clubStatus ? clubStatus.label : value.replace(/_/g, ' ')}
     </Badge>
   );
 };
