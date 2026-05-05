@@ -69,7 +69,7 @@ export const Sidebar = ({ user }: { user?: SessionUser }) => {
     <Grid
       p="2"
       columns="1"
-      rows="1fr min-content"
+      rows="min-content 1fr min-content"
       minHeight="100vh"
       maxHeight="100vh"
       position="sticky"
@@ -80,24 +80,27 @@ export const Sidebar = ({ user }: { user?: SessionUser }) => {
         transition: 'background-color 150ms ease, border-color 150ms ease',
       }}
     >
-      <ScrollArea>
-        <Heading as="h2" size="4" mb="3">
-          <Flex mb="4">
-            <Badge
-              color={environment.color}
-              size="2"
-              radius="full"
-              variant="solid"
-              style={{
-                width: '100%',
-                textAlign: 'center',
-                justifyContent: 'center',
-                textTransform: 'uppercase',
-              }}
-            >
-              {environment.label}
-            </Badge>
-          </Flex>
+      <Box>
+        <Heading as="h2" size="4" mb="3" style={{ position: 'relative' }}>
+          <Badge
+            color={environment.color}
+            size="2"
+            radius="full"
+            variant="solid"
+            style={{
+              // width: '100%',
+              position: 'absolute',
+              top: '0.5em',
+              right: '0.5em',
+              textAlign: 'center',
+              justifyContent: 'center',
+              textTransform: 'uppercase',
+              pointerEvents: 'none',
+            }}
+          >
+            {environment.label}
+          </Badge>
+
           <Box pl="1" pt="2" pr="6" pb="4">
             <Link href="/" style={{ display: 'block' }}>
               <Logo />
@@ -123,12 +126,16 @@ export const Sidebar = ({ user }: { user?: SessionUser }) => {
             <Select.Item value="seats">Seats</Select.Item>
           </Select.Content>
         </Select.Root>
+      </Box>
+
+      <ScrollArea>
         <Grid columns="1" gap="2" my="2">
           {mode === 'compliance' && <ComplianceNav color={currentAppColor} />}
           {mode === 'clubs' && <ClubsNav color={currentAppColor} />}
           {mode === 'seats' && <SeatsNav color={currentAppColor} />}
         </Grid>
       </ScrollArea>
+
       <UserCard {...user} />
     </Grid>
   );
@@ -162,6 +169,15 @@ const ComplianceNav = ({ color }: { color: RadixColor }) => (
     </NavItem>
     <NavItem href="/issues" color={color}>
       App Issues
+    </NavItem>
+    <NavItem href="/fulfillments" color={color}>
+      Fulfillments
+    </NavItem>
+    <NavItem href="/webhook-logs" color={color}>
+      Webhook Logs
+    </NavItem>
+    <NavItem href="/bulk-operations" color={color}>
+      Bulk Operations
     </NavItem>
     <Separator size="4" />
     <Flex align="center" justify="between" gap="2">

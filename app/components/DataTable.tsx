@@ -10,6 +10,7 @@ export type Header = {
   formatter?: (value: any, row: any) => string | ReactNode;
   clipboard?: boolean;
   type?: ColumnType;
+  as?: 'code';
 };
 
 type DataTableProps = {
@@ -63,12 +64,20 @@ export const DataTable = ({ headers, data, Actions }: DataTableProps) => {
 
                 if (!header.id) return null;
 
-                const formatter = header.formatter || ((value: any) => String(value));
-                const displayValue = formatter(row[header.id], row);
+                const rawValue = row[header.id];
+                const displayValue = header.formatter
+                  ? header.formatter(rawValue, row)
+                  : header.as === 'code'
+                    ? rawValue ?? '—'
+                    : String(rawValue ?? '');
 
                 return (
                   <Table.Cell key={key} minWidth="max-content" style={{ whiteSpace: 'nowrap' }}>
-                    {displayValue}
+                    {header.as === 'code' && !header.formatter ? (
+                      <code>{displayValue}</code>
+                    ) : (
+                      displayValue
+                    )}
                   </Table.Cell>
                 );
               })}
