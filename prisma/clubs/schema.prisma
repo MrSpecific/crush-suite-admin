@@ -1,0 +1,1234 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../../generated/prisma/clubs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Merchant {
+  id                     Int                    @id @default(autoincrement())
+  createdAt              DateTime               @default(now())
+  updatedAt              DateTime               @updatedAt
+  shop                   String                 @unique
+  status                 Status
+  platformEmail          String?
+  platformShopName       String? // without the .myshopify.com
+  platformTimezone       String?
+  platformZipCode        String?
+  platformStateCode      String?
+  platformPhone          String?
+  subscriptionDiscountId Int?
+  subscriptionDiscount   SubscriptionDiscount?  @relation(fields: [subscriptionDiscountId], references: [id])
+  ApiAccess              ApiAccess[]
+  GDPR                   GDPR[]
+  AppBillingPlan         AppBillingPlan?        @relation(fields: [appBillingPlanId], references: [id])
+  appBillingPlanId       Int?
+  Club                   Club[]
+  MerchantEmailSettings  MerchantEmailSettings?
+  GDPRRequest            GDPRRequest[]
+  bundleDiscountId       String? // Shopify automatic discount GID for bundle Function
+  bundleCartTransformId  String? // Shopify CartTransform ID for bundle Function
+
+  @@index([shop])
+}
+
+enum PerUseType {
+  transaction
+}
+
+enum PerUseUnits {
+  percent
+  fixed
+}
+
+model SubscriptionDiscount {
+  id                Int          @id @default(autoincrement())
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @default(now())
+  platform          String       @default("shopify")
+  description       String
+  value             String
+  discountFixed     Float
+  discountPercent   Float
+  discountType      DiscountType @default(recurring)
+  uses              Int          @default(1)
+  durationIntervals Int
+  applicablePlanIds Int[]        @default([]) // optional and we don't actually utilize a fk on the plan table
+  merchants         Merchant[]
+}
+
+model AdminUser {
+  id         String        @id @default(cuid())
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+  lastLogin  DateTime?
+  email      String        @unique
+  givenName  String
+  familyName String
+  password   String
+  role       Role          @default(USER)
+  actions    AdminAction[]
+}
+
+enum Role {
+  VIEWER
+  USER
+  ADMIN
+  SUPERADMIN
+  DISABLED
+}
+
+model AdminAction {
+  id          String    @id @default(cuid())
+  timestamp   DateTime  @default(now())
+  user        AdminUser @relation(fields: [userId], references: [id])
+  userId      String
+  description String
+  data        Json?
+  notes       String?
+}
+
+model ApiAccess {
+  id         String   @id @default(cuid())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  privateKey String
+  sandboxKey String?  @unique
+  limit      Int      @default(60) // 60 requests per minute
+  scopes     String[] @default([]) // eg read:products, write:products etc
+  merchantId Int
+  merchant   Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  @@unique([privateKey, merchantId])
+}
+
+model GDPR {
+  id                 String    @id @default(cuid())
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  platform           String    @default("shopify")
+  shop               String
+  merchantId         Int
+  platformCustomerId String?
+  customerId         Int?
+  completedAt        DateTime?
+  completed          Boolean   @default(false)
+  type               String // customer redact, customer data request etc
+  instructions       String?
+  merchant           Merchant  @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+}
+
+// Club models go here
+model AppSession {
+  id            String    @id
+  shop          String
+  state         String
+  isOnline      Boolean   @default(false)
+  scope         String?
+  expires       DateTime?
+  accessToken   String
+  userId        BigInt?
+  firstName     String?
+  lastName      String?
+  email         String?
+  accountOwner  Boolean   @default(false)
+  locale        String?
+  collaborator  Boolean?  @default(false)
+  emailVerified Boolean?  @default(false)
+}
+
+model AppBillingPlan {
+  id               Int         @id @default(autoincrement())
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @default(now())
+  platform         String      @default("shopify")
+  name             String
+  description      String?
+  trialDays        Int         @default(0)
+  notes            String?
+  type             BillingType
+  currencyCode     String      @default("USD")
+  price            Float       @default(0) // base price
+  perUsePrice      Float       @default(0) // eg revenue sharing
+  perUseThreshold  Float       @default(0) // eg revenue sharing when threshod has been met
+  perUseCap        Int         @default(0) // eg revenue sharing capped amount
+  perUseUnits      PerUseUnits @default(percent)
+  perUseTerms      String      @default("X % per month over Y USD. Capped at Z USD")
+  perUseType       PerUseType  @default(transaction)
+  accessibleStores String[]    @default([]) // if shopname with myshopify is present, only those shops will be eligible for this plan
+  merchants        Merchant[]
+}
+
+model Club {
+  id                                String            @id @default(cuid())
+  createdAt                         DateTime          @default(now())
+  updatedAt                         DateTime          @updatedAt
+  name                              String
+  description                       String?
+  timezone                          ClubTz            @default(America_New_York)
+  platformHandle                    String?
+  archived                          Boolean           @default(false)
+  status                            ClubStatus        @default(draft)
+  platformProductId                 String?
+  platformVariantId                 String?
+  platformSellingPlanId             String?
+  platformClubLocationId            String? // the inventory source location for this club — defaults to primary fulfillment location if null
+  platformCustomerTag               String?           @default("club_member") // tag to add to customers who are members of this club
+  membershipPrice                   Float             @default(0) // recurring membership fee amount (mirrors Shopify variant price)
+  membershipRenewalFrequency        Int               @default(12) // in months, eg 3 means every 3 months, default is yearly
+  estimatedReleaseFrequency         Int               @default(4)
+  estimatedReleaseUnit              TimeUnit          @default(month)
+  releaseType                       ReleaseType       @default(automatic)
+  clubType                          ClubType          @default(release) // release or bundle subscription
+  bundleFrequencies                 BundleFrequency[] @default([]) // frequencies offered for bundle subscription clubs (empty for release clubs)
+  defaultInventoryAllocationPeriod  Int               @default(3) // in days, when a release is created, how many days before should inventory be allocated to hold
+  defaultCustomerSignupCutoffPeriod Int               @default(7) // in days, how many days before a release should customers be allowed to sign up
+  allowSkipRelease                  Boolean           @default(true)
+  addComplianceProducts             Boolean           @default(false) // if true, compliance products will be added to the release orders automatically - requires connection to CrushSuite compliance app
+  billingInventoryPolicy            String            @default("PRODUCT_VARIANT_INVENTORY_POLICY") // "PRODUCT_VARIANT_INVENTORY_POLICY" | "ALLOW_OVERSELLING"
+  currencyCode                      String            @default("USD")
+  market                            String            @default("US")
+  nextMemberNumber                  Int               @default(0) // atomic counter for generating sequential member numbers
+  merchantId                        Int
+  merchant                          Merchant          @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  Release                           Release[]
+  Membership                        Membership[]
+  ClubMigration                     ClubMigration[]
+  BundleType                        BundleType[]
+}
+
+enum ClubType {
+  release
+  bundle_subscription
+}
+
+enum ReleaseType {
+  automatic
+  manual
+}
+
+enum TimeUnit {
+  day
+  week
+  month
+  year
+}
+
+enum ClubStatus {
+  draft
+  published
+  archived
+}
+
+model Release {
+  id                                String                        @id @default(cuid())
+  createdAt                         DateTime                      @default(now())
+  updatedAt                         DateTime                      @updatedAt
+  name                              String
+  platformHandle                    String
+  description                       String
+  status                            ReleaseStatus                 @default(published)
+  allowCustomization                Boolean                       @default(true)
+  publishDate                       DateTime // when customers can start customizing
+  customizationDeadline             DateTime // customers can no longer customize after this date
+  signupDeadline                    DateTime? // when customers who sign up for a club can no longer join for this release
+  inventoryAllocationDate           DateTime // when inventory should be allocated for this release
+  shippingHoldDate                  DateTime? // when shipping should be held until - only relevant for CrushSuite compliance integration. we can decorate all contract orders with this data
+  inventoryReserved                 Boolean                       @default(false)
+  inventoryReservedForMemberCount   Int                           @default(0) // member count used for the last default inventory reserve — used to compute deltas
+  inventoryUnreserved               Boolean                       @default(false) // tracks pre-billing unreserve completion
+  inventoryError                    String? // surfaced to merchant when unreserve fails and billing proceeds with ALLOW_OVERSELLING
+  releaseOrdersProcessLockId        String? // to prevent concurrent processing of release orders
+  billingAttemptsProcessLockId      String? // to prevent concurrent processing of billing attempts
+  allReleaseOrdersCreated           Boolean                       @default(false) // set to true when all release orders have been created for this release
+  allReleaseOrdersCreatedAt         DateTime? // when the release orders were created
+  contractsGenerated                Boolean                       @default(false) // if the contracts have been generated for this release
+  contractsGeneratedAt              DateTime? // when the contracts were generated for this release
+  attemptedFirstBillingAt           DateTime? // when we first attempted to bill customers for this release for all release orders
+  releaseDate                       DateTime // when the orders should be created
+  defaultPlatformShippingMethodId   String? // the default shipping rate ID to use for this release
+  defaultPlatformShippingMethodName String? // the default shipping rate name to use for this release
+  deliveryMethods                   DeliveryMethod[]              @default([SHIPPING])
+  enabledShippingMethods            String[]                      @default([]) // list of enabled shipping method rate names
+  shippingFlatRate                  Float? // if set, this flat rate will be used for shipping instead of the calculated rate and applied to the default method
+  allowUPSAccessPointPickup         Boolean                       @default(false) // only available to merchant who have CrushSuite compliance integration. This gets registered as a shipping method on the order
+  onlyCheapestShippingRate          Boolean                       @default(true) // when true, only the cheapest non-AP shipping rate is shown to customers (plus AP rates if allowed)
+  minOrderQuantity                  Int                           @default(1)
+  minOrderValue                     Float?
+  maxOrderQuantity                  Int?
+  giftNote                          String?
+  clubId                            String
+  club                              Club                          @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  ReleaseProduct                    ReleaseProduct[]
+  ReleaseOrder                      ReleaseOrder[]
+  ReleaseInventoryReservation       ReleaseInventoryReservation[]
+  releaseDiscounts                  ReleaseDiscount[]
+
+  @@index([clubId])
+  @@index([clubId, releaseDate])
+}
+
+enum ReleaseStatus {
+  draft
+  published
+}
+
+model ReleaseProduct {
+  id                          String                        @id @default(cuid())
+  createdAt                   DateTime                      @default(now())
+  release                     Release                       @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+  releaseId                   String
+  platformProductId           String
+  platformVariantId           String
+  quantity                    Int
+  maxQuantity                 Int?
+  minQuantity                 Int? // this essentially means the product is required to be purchased
+  quantityAdjustable          Boolean                       @default(true)
+  priceAtCreation             Float                         @default(0) // price at the time of release creation, used for compareAt price
+  price                       Float                         @default(0) // the merchant sets this price in the admin, they can use this instead of a discount
+  currencyCode                String                        @default("USD")
+  excludeFromDiscounts        Boolean                       @default(false)
+  kind                        ProductKind
+  orderPriority               Int                           @default(0) // lower numbers appear first
+  ReleaseOrderProduct         ReleaseOrderProduct[]
+  ReleaseInventoryReservation ReleaseInventoryReservation[]
+  releaseProductBundle        ReleaseProductBundle?         @relation(fields: [releaseProductBundleId], references: [id])
+  releaseProductBundleId      String?
+
+  @@index([releaseId])
+}
+
+enum ProductKind {
+  optional
+  default
+}
+
+model ReleaseProductBundle {
+  id                   String           @id @default(cuid())
+  name                 String
+  description          String?
+  platformCollectionId String?
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+  ReleaseProduct       ReleaseProduct[]
+}
+
+// Discounting models are designed to be polymorphic and reusable across different systems in the Clubs app
+model ReleaseDiscount {
+  id        String  @id @default(cuid())
+  releaseId String
+  release   Release @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+
+  name        String
+  description String?
+
+  scope                DiscountScope // PRODUCT | SHIPPING
+  condition            DiscountCondition // QUANTITY | SUBTOTAL - quantity overules subtotal - we should prevent having both in the UI
+  enabledShippingRates String[]          @default([]) // if scope is SHIPPING, which shipping rates does this discount apply to
+  minQuantity          Int?
+  minSubtotal          Float?
+
+  valueType       DiscountValueType // PERCENT | FIXED
+  discountPercent Float?
+  discountAmount  Float?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([releaseId])
+}
+
+enum DiscountScope {
+  PRODUCT
+  SHIPPING
+}
+
+enum DiscountCondition {
+  QUANTITY
+  SUBTOTAL
+}
+
+enum DiscountValueType {
+  PERCENT
+  FIXED
+}
+
+model ReleaseInventoryReservation {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  releaseId String
+  release   Release @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+
+  releaseProductId String
+  releaseProduct   ReleaseProduct @relation(fields: [releaseProductId], references: [id], onDelete: Cascade)
+
+  platformLocationId      String // degidified Shopify Location ID
+  platformInventoryItemId String // degidified Shopify InventoryItem ID
+
+  quantityReserved   Int @default(0) // total units in "reserved" state
+  quantityUnreserved Int @default(0) // units moved back to "available" pre-billing
+  deficit            Int @default(0) // shortfall if available < requested
+
+  reservedAt   DateTime? // when reserve completed
+  unreservedAt DateTime? // when unreserve completed
+
+  reserveReferenceUri   String? // Shopify referenceDocumentUri for audit trail
+  unreserveReferenceUri String? // referenceDocumentUri for the unreserve
+
+  @@unique([releaseId, releaseProductId]) // one record per product per release
+  @@index([releaseId])
+}
+
+// Does not represent a completed order necessarily, just all the products a customer has made for a release
+// used for generation of contracts in Shopify
+model ReleaseOrder {
+  id                                String                         @id @default(cuid())
+  createdAt                         DateTime                       @default(now())
+  updatedAt                         DateTime                       @updatedAt
+  releaseId                         String
+  release                           Release                        @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+  customizedAt                      DateTime? // when the customer last customized this order
+  platformCustomerId                String
+  platformContractId                String? // eg the subscription contract ID in Shopify
+  contractGeneratedAt               DateTime?
+  attemptedFirstBillingAt           DateTime? // we only auto bill once per release order, so record when we first attempted to bill
+  orderCreatedAt                    DateTime? // when the order was created in the platform
+  platformOrderId                   String? // if the order has been created in Shopify
+  products                          ReleaseOrderProduct[]
+  skippedAt                         DateTime? // if the customer skipped this release, when did they skip. Note this means other data, like the platform contract id should be empty
+  deliveryPrice                     Float                          @default(0)
+  deliveryMethod                    DeliveryMethod                 @default(SHIPPING)
+  deliveryAddress                   Json?
+  deliveryPhone                     String? // phone number for delivery notifications
+  // Pickup specific fields
+  deliveryPickupPlatformLocationId  String? // if pickup, which location ID
+  deliveryPickupTitle               String? // eg the title of the pickup location
+  deliveryPickupDescription         String? // eg the description of the pickup location, eg address etc
+  deliveryPickupCode                String? // eg the pickup code for Store pickups
+  // Local delivery specific fields
+  deliveryLocalDeliveryCode         String? // eg the code to identify the local delivery
+  deliveryLocalDeliveryInstructions String? // special instructions for local delivery
+  // Shipping specific fields
+  shippingRate                      String? // the shipping rate code (e.g., "03:U61302558" for UPS Access Point, "Vinoshipper" for standard)
+  shippingRateTitle                 String? // the display title of the shipping rate (e.g., "📦 UPS Pickup: 3519 NE 15TH AVE")
+  platformPaymentMethodId           String? // eg the payment method ID in Shopify
+  complianceFee                     Json? // compliance fee object {[variantId: number]: quantity}
+  complianceFeeCost                 Float                          @default(0)
+  complianceCheckValid              Boolean?
+  discountAmount                    Float                          @default(0)
+  discountPercent                   Float                          @default(0)
+  shippingDiscountAmount            Float                          @default(0)
+  shippingDiscountPercent           Float                          @default(0)
+  subtotal                          Float                          @default(0)
+  customerShippingHoldUntil         DateTime? // if the customer has requested a shipping hold until date
+  customerNotes                     String?
+  total                             Float                          @default(0)
+  currencyCode                      String                         @default("USD")
+  notes                             String[]                       @default([]) // flexibly store notes about creation
+  preProcessingError                Boolean                        @default(false) // if there is likely to be a processing error due to data issues
+  giftNote                          String? // this gets copied from the release at creation time but can be edited here as it is per-order, so can tailor to the customer
+  clubCustomerId                    String
+  clubCustomer                      ClubCustomer                   @relation(fields: [clubCustomerId], references: [id], onDelete: Cascade)
+  orderProcessingRecords            ReleaseOrderProcessingRecord[]
+
+  @@unique([releaseId, platformCustomerId])
+}
+
+enum DeliveryMethod {
+  SHIPPING
+  PICKUP
+  LOCAL_DELIVERY
+}
+
+model ReleaseOrderProcessingRecord {
+  id                                   String       @id @default(cuid())
+  createdAt                            DateTime     @default(now())
+  updatedAt                            DateTime     @updatedAt
+  releaseOrderId                       String
+  releaseOrder                         ReleaseOrder @relation(fields: [releaseOrderId], references: [id], onDelete: Cascade)
+  key                                  String? // unique key for the processing attempt, eg "initial_payment_attempt", "retry_1" etc
+  completedAt                          DateTime?
+  nextActionUrl                        String? // eg a url to redirect the customer to complete payment - update on webhook
+  platformSubscriptionBillingAttemptId String? // if a billing attempt has been made for the subscription. errors can be recorded at contract generation or billing attempt
+  platformErrorCode                    String?
+  errorData                            Json?
+  success                              Boolean      @default(false)
+  processingAttempt                    Int          @default(1) // incremented each time an attempt is made to process the order
+}
+
+model ReleaseOrderProduct {
+  id               String         @id @default(cuid())
+  createdAt        DateTime       @default(now())
+  order            ReleaseOrder   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId          String
+  releaseProduct   ReleaseProduct @relation(fields: [releaseProductId], references: [id], onDelete: Cascade)
+  releaseProductId String
+  price            Float          @default(0) // price at the time of release order creation/update
+  currencyCode     String         @default("USD")
+  quantity         Int
+}
+
+model ClubCustomer {
+  id                             String   @id @default(cuid())
+  createdAt                      DateTime @default(now())
+  updatedAt                      DateTime @updatedAt
+  platformCustomerId             String
+  defaultPlatformPaymentMethodId String? // eg the default payment method ID in Shopify
+  shop                           String
+  defaultEmail                   String
+  firstName                      String?
+  lastName                       String?
+  defaultPhoneNumber             String?
+  defaultShippingAddress         Json?
+  defaultBillingAddress          Json?
+  notes                          String?
+
+  ReleaseOrder ReleaseOrder[]
+  Membership   Membership[]
+
+  @@unique([platformCustomerId, shop])
+}
+
+// Some defaults exist on the customer but having this per-membership allows for different addresses etc per club, necessary for some use cases
+model Membership {
+  id                                 String                    @id @default(cuid())
+  createdAt                          DateTime                  @default(now())
+  updatedAt                          DateTime                  @updatedAt
+  platformContractId                 String? // eg the subscription contract ID in Shopify
+  platformPaymentMethodId            String? // eg the payment method ID in Shopify
+  email                              String?
+  phoneNumber                        String?
+  shippingAddress                    Json?
+  billingAddress                     Json?
+  preferredShippingRateCode          String? // eg the shipping rate ID in Shopify
+  preferredDeliveryMethod            DeliveryMethod?
+  preferredLocalDeliveryInstructions String? // special instructions for local delivery
+  preferredPickupPlatformLocationId  String? // if pickup, which location ID
+  memberNumber                       String? // human-readable membership ID fixed at creation (e.g., "RC-001")
+  externalMemberNumber               String? // preserved member number from migration/external system
+  customer                           ClubCustomer              @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  customerId                         String
+  club                               Club                      @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  clubId                             String
+  joinedAt                           DateTime                  @default(now())
+  leftAt                             DateTime?
+  pausedAt                           DateTime?
+  pauseReleasesForCount              Int?
+  pauseUntil                         DateTime?
+  status                             MembershipStatus          @default(ACTIVE)
+  nextMembershipBillingDate          DateTime? // when this member should next be billed for membership fee
+  lastMembershipBilledAt             DateTime? // when they were last successfully billed for membership fee
+  events                             MembershipEvent[] // related to Release type clubs
+  billingRecords                     MembershipBillingRecord[]
+  bundleSubscription                 BundleSubscription?
+  bundleSubscriptionEvents           BundleSubscriptionEvent[]
+
+  @@unique([customerId, clubId]) // prevent duplicates
+  @@unique([clubId, memberNumber]) // enforce unique member numbers per club
+  @@index([customerId])
+  @@index([clubId])
+  @@index([customerId, status])
+}
+
+enum MembershipStatus {
+  ACTIVE
+  PAUSED
+  LEFT
+  PENDING_MIGRATION
+}
+
+model MembershipBillingRecord {
+  id                       String                  @id @default(cuid())
+  createdAt                DateTime                @default(now())
+  updatedAt                DateTime                @updatedAt
+  membership               Membership              @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  membershipId             String
+  billingCycleStart        DateTime // start of the period being billed
+  billingCycleEnd          DateTime // end of the period being billed
+  amount                   Float // amount charged
+  currencyCode             String                  @default("USD")
+  status                   MembershipBillingStatus @default(PENDING)
+  platformOrderId          String? // Shopify order ID on success
+  platformBillingAttemptId String? // Shopify billing attempt ID
+  errorMessage             String? // error details on failure
+  attemptCount             Int                     @default(1) // retry tracking
+  processedAt              DateTime? // when the attempt resolved
+
+  @@index([membershipId])
+  @@index([status])
+  @@index([membershipId, status])
+}
+
+enum MembershipBillingStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  CHALLENGED
+}
+
+model MembershipEvent {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  membership   Membership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  membershipId String
+
+  type     MembershipEventType
+  reason   String?
+  metadata Json?
+
+  effectiveFrom            DateTime  @default(now())
+  effectiveForReleaseCount Int?
+  effectiveUntil           DateTime?
+}
+
+enum MembershipEventType {
+  JOINED
+  PAUSED
+  UNPAUSED
+  LEFT
+  REJOINED
+  SKIPPED_RELEASE
+  UNSKIPPED_RELEASE
+}
+
+// ─── Bundle Subscription ──────────────────────────────────────────
+
+enum BundleMode {
+  FIXED // merchant pre-selects products
+  PICK_AND_MIX // customer chooses from catalog
+}
+
+enum BundleTypeStatus {
+  active // visible on storefront, accepts new signups
+  archived // hidden from storefront, no new signups, existing subscribers unaffected
+}
+
+enum BundleFrequency {
+  WEEKLY
+  BIWEEKLY
+  MONTHLY
+  BIMONTHLY
+  QUARTERLY
+  BIANNUALLY
+  ANNUALLY
+}
+
+enum BundleSubscriptionStatus {
+  ACTIVE
+  PAUSED
+  CANCELLED
+}
+
+enum BundleOrderStatus {
+  PENDING // created, awaiting billing cycle
+  PROCESSING // billing attempt in progress
+  COMPLETED // order created successfully
+  FAILED // billing failed
+  SKIPPED // customer skipped this cycle
+  CHALLENGED // 3D Secure challenge from financial institution
+}
+
+/// Where a BundleOrder originated from. Drives billing-CRON behaviour
+/// (CHECKOUT rows are already-billed and must be skipped) and merchant
+/// reporting.
+enum BundleOrderSource {
+  CHECKOUT // first order from the customer's signup checkout (already billed by Shopify)
+  RENEWAL // recurring billing-attempt-driven order from the CRON
+  MANUAL // future: merchant-created from the dashboard (e.g. retry, replacement)
+}
+
+/// Defines a bundle offering within a club.
+/// For FIXED mode: each BundleType is a tier/variant (e.g., "3-Pack Red", "6-Pack Mixed")
+/// For PICK_AND_MIX mode: each BundleType is a curated option (e.g., "Build Your Red 6-Pack")
+model BundleType {
+  id                         String               @id @default(cuid())
+  createdAt                  DateTime             @default(now())
+  updatedAt                  DateTime             @updatedAt
+  name                       String // "Red Wine 6-Pack", "Mixed Case", "3-Pack Sampler"
+  description                String? // customer-facing description shown during selection
+  mode                       BundleMode // FIXED or PICK_AND_MIX
+  status                     BundleTypeStatus     @default(active) // archived = no new signups, hidden from storefront; existing subscribers continue
+  minItems                   Int                  @default(1)
+  maxItems                   Int
+  platformSellingPlanGroupId String? // Shopify selling plan for this bundle type
+  platformProductId          String? // Shopify product that represents this bundle type on PDP
+  platformVariantId          String?
+  orderPriority              Int                  @default(0) // display order in the BundleType selection step
+  clubId                     String
+  club                       Club                 @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  products                   BundleProduct[]
+  subscriptions              BundleSubscription[]
+  discounts                  BundleDiscount[]
+
+  @@index([clubId])
+}
+
+/// Products available in a bundle type (merchant catalog for this bundle)
+model BundleProduct {
+  id                  String               @id @default(cuid())
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  platformProductId   String
+  platformVariantId   String
+  defaultQuantity     Int                  @default(0) // for FIXED bundles, this is the set quantity
+  minQuantity         Int? // null = no minimum
+  maxQuantity         Int? // null = no maximum
+  price               Float                @default(0) // price shown for this product in the bundle
+  priceAtCreation     Float                @default(0) // original price for compareAt
+  currencyCode        String               @default("USD")
+  excludeFromDiscount Boolean              @default(false)
+  kind                ProductKind // default = included, optional = customer can add/remove
+  orderPriority       Int                  @default(0)
+  bundleTypeId        String
+  bundleType          BundleType           @relation(fields: [bundleTypeId], references: [id], onDelete: Cascade)
+  BundleOrderProduct  BundleOrderProduct[]
+
+  @@index([bundleTypeId])
+}
+
+/// A customer's active bundle subscription (1:1 with Membership for bundle clubs)
+model BundleSubscription {
+  id                             String                   @id @default(cuid())
+  createdAt                      DateTime                 @default(now())
+  updatedAt                      DateTime                 @updatedAt
+  frequency                      BundleFrequency          @default(MONTHLY)
+  status                         BundleSubscriptionStatus @default(ACTIVE)
+  platformConsolidatedContractId String? // the FINAL consolidated Shopify contract
+  nextBillingDate                DateTime?
+  lastBilledAt                   DateTime?
+  membershipId                   String                   @unique
+  membership                     Membership               @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  bundleTypeId                   String
+  bundleType                     BundleType               @relation(fields: [bundleTypeId], references: [id], onDelete: Cascade)
+  orders                         BundleOrder[]
+  currentSelections              BundleSelectionSnapshot?
+
+  /// Cart-side bundle UUID (`_cs_bundle_id` from the parent cart line),
+  /// generated once per cart-add by the bundle builder JS. Used as the
+  /// idempotency key for `handleBundleSignup` — duplicate webhooks for
+  /// the same checkout no-op instead of creating a second consolidated
+  /// contract. Nullable for legacy rows; new rows always set it.
+  cartBundleId String? @unique
+
+  /// Snapshot of the matched discount tier at signup (refreshed when the
+  /// customer changes selections via Customer Accounts). Shape conforms
+  /// to `AppliedTierSnapshot` in BundleSubscription.types.ts — the type
+  /// is the source of truth and reads/writes go through helpers, not raw
+  /// Json. Null if no tier was matched.
+  appliedTier Json?
+
+  /// Total $ product discount baked into the contract for one billing
+  /// cycle, summed across all line-level adjustments. Mirrors the contract
+  /// state for fast queries without re-reading from Shopify.
+  productDiscountTotal Float?
+
+  // ─── Locked-in delivery at signup (refreshed on customer changes) ──
+  /// Delivery method chosen at checkout. Mirrors ReleaseOrder.deliveryMethod.
+  /// Determines which of the per-method blocks below carry data:
+  ///   SHIPPING       → deliveryAddress + shippingRate/RateTitle/...
+  ///   PICKUP         → deliveryPickup* fields, no deliveryAddress
+  ///   LOCAL_DELIVERY → deliveryAddress + deliveryLocalDelivery* fields
+  deliveryMethod  DeliveryMethod @default(SHIPPING)
+  /// Address used for SHIPPING and LOCAL_DELIVERY methods. Null for PICKUP.
+  /// Shape mirrors the address used by Membership/ReleaseOrder.
+  deliveryAddress Json?
+  /// Phone number for delivery notifications.
+  deliveryPhone   String?
+
+  // SHIPPING-specific
+  /// Carrier code (e.g., "shopify-Standard", "03:U61302558" for UPS Access Point).
+  shippingRate            String?
+  /// Display title of the shipping rate (e.g., "Standard Shipping",
+  /// "📦 UPS Pickup: 3519 NE 15TH AVE").
+  shippingRateTitle       String?
+  /// Pre-discount carrier rate.
+  shippingBasePrice       Float?
+  /// Post-discount price billed each cycle (= contract.deliveryPrice for SHIPPING).
+  shippingDiscountedPrice Float?
+  /// Title of the shipping discount, if one was applied. Null when no
+  /// shipping discount applied.
+  shippingDiscountTitle   String?
+
+  // PICKUP-specific
+  deliveryPickupPlatformLocationId String?
+  deliveryPickupTitle              String?
+  deliveryPickupDescription        String?
+  deliveryPickupCode               String?
+
+  // LOCAL_DELIVERY-specific
+  deliveryLocalDeliveryCode         String?
+  deliveryLocalDeliveryInstructions String?
+
+  /// Compliance fee variants baked into the consolidated contract for
+  /// each billing cycle. Mirrors `ReleaseOrder.complianceFee` shape:
+  /// `{ [variantId: string]: quantity, complianceKey?: string }`.
+  /// Refreshed on signup, selections changes, address changes, phone
+  /// changes, and bundleType swaps. Driven entirely from the Compliance
+  /// app's per-state rules — no value here means the customer ships to
+  /// a state with no compliance fee, OR the merchant hasn't enabled
+  /// `Club.addComplianceProducts`, OR the Compliance app is not
+  /// installed. Null is interchangeable with empty / absent.
+  complianceFee     Json?
+  /// Dollar total of the compliance fee for one cycle. Per-unit price
+  /// is derived as `complianceFeeCost / totalQty(complianceFee)` when
+  /// composing contract line items.
+  complianceFeeCost Float @default(0)
+
+  @@index([membershipId])
+  @@index([bundleTypeId])
+  @@index([status, nextBillingDate])
+}
+
+/// Snapshot of the product selections currently baked into the
+/// consolidated subscription contract. Created at signup for ALL
+/// bundle modes — for PICK_AND_MIX it captures the customer's picks,
+/// for FIXED it captures the BundleType's default products at signup
+/// time so a later merchant edit doesn't retroactively change what
+/// the customer is billed for. Re-upserted on every selections /
+/// bundleType update so it stays in sync with the live contract.
+/// Used by `verifyContractMatchesSubscription` (9h) as the source of
+/// truth for pre-billing line drift detection.
+model BundleSelectionSnapshot {
+  id                   String             @id @default(cuid())
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  bundleSubscriptionId String             @unique
+  bundleSubscription   BundleSubscription @relation(fields: [bundleSubscriptionId], references: [id], onDelete: Cascade)
+  selections           Json // [{productId, variantId, quantity}]
+}
+
+/// A specific billing cycle order for a bundle subscription. The CHECKOUT
+/// row captures the customer's first order (already billed by Shopify);
+/// RENEWAL rows are created by the billing CRON; MANUAL is reserved for
+/// future merchant-driven creation.
+model BundleOrder {
+  id                       String             @id @default(cuid())
+  createdAt                DateTime           @default(now())
+  updatedAt                DateTime           @updatedAt
+  bundleSubscriptionId     String
+  bundleSubscription       BundleSubscription @relation(fields: [bundleSubscriptionId], references: [id], onDelete: Cascade)
+  source                   BundleOrderSource  @default(RENEWAL)
+  billingCycleStart        DateTime
+  billingCycleEnd          DateTime
+  status                   BundleOrderStatus  @default(PENDING)
+  platformContractId       String? // consolidated contract used for billing
+  platformOrderId          String? // Shopify order created on success
+  platformBillingAttemptId String?
+  subtotal                 Float              @default(0)
+  productDiscountTotal     Float              @default(0)
+  shippingCost             Float              @default(0) // post-discount, billed
+  shippingBasePrice        Float? // pre-discount carrier rate
+  shippingDiscountTotal    Float              @default(0) // shippingBasePrice - shippingCost
+  shippingDiscountTitle    String?
+  /// Per-cycle snapshot of the compliance fee variants billed by THIS
+  /// order (mirrors `BundleSubscription.complianceFee` at billing
+  /// time). Same `{ [variantId]: qty, complianceKey? }` shape.
+  complianceFee            Json?
+  /// Dollar total of the compliance fee for this cycle (snapshot of
+  /// `BundleSubscription.complianceFeeCost` at billing time).
+  complianceFeeCost        Float              @default(0)
+  /// Result of the per-cycle prepurchase compliance check. `true` =
+  /// passed, `false` = failed (errors pushed to `notes`, billing still
+  /// proceeded), `null` = check skipped (no DOB on file, Compliance app
+  /// not installed, or `Club.addComplianceProducts` disabled).
+  complianceCheckValid     Boolean?
+  total                    Float              @default(0)
+  currencyCode             String             @default("USD")
+  skippedAt                DateTime?
+  errorMessage             String?
+  /// Non-fatal notes attached during the billing cycle — e.g. the
+  /// preferred shipping rate not being available so a fallback was
+  /// billed, or a shipping recompute that failed and used last-
+  /// known-good. Mirrors `ReleaseOrder.notes`. Use `errorMessage`
+  /// for dispositive failures (status = FAILED), `notes` for
+  /// informational items the merchant should see but that didn't
+  /// block billing.
+  notes                    String[]           @default([])
+
+  // ─── Per-cycle delivery snapshot ────────────────────────────────────
+  /// Per-cycle copy of the subscription's delivery method. The
+  /// subscription's locked-in method may change over time (customer
+  /// switches from shipping to pickup); this row records what was
+  /// actually used for THIS order. Same enum + per-method blocks as
+  /// BundleSubscription.
+  deliveryMethod  DeliveryMethod @default(SHIPPING)
+  deliveryAddress Json?
+  deliveryPhone   String?
+
+  // SHIPPING-specific
+  shippingRate      String?
+  shippingRateTitle String?
+
+  // PICKUP-specific
+  deliveryPickupPlatformLocationId String?
+  deliveryPickupTitle              String?
+  deliveryPickupDescription        String?
+  deliveryPickupCode               String?
+
+  // LOCAL_DELIVERY-specific
+  deliveryLocalDeliveryCode         String?
+  deliveryLocalDeliveryInstructions String?
+
+  /// Snapshot of the matched discount tier at the time this order ran.
+  /// Same `AppliedTierSnapshot` shape as BundleSubscription.appliedTier.
+  appliedTier Json?
+
+  products BundleOrderProduct[]
+
+  @@index([bundleSubscriptionId])
+  @@index([status, billingCycleStart])
+  @@index([source])
+}
+
+/// Products in a specific bundle order
+model BundleOrderProduct {
+  id              String        @id @default(cuid())
+  createdAt       DateTime      @default(now())
+  bundleOrderId   String
+  bundleOrder     BundleOrder   @relation(fields: [bundleOrderId], references: [id], onDelete: Cascade)
+  bundleProductId String
+  bundleProduct   BundleProduct @relation(fields: [bundleProductId], references: [id], onDelete: Cascade)
+  quantity        Int
+  price           Float         @default(0)
+  currencyCode    String        @default("USD")
+
+  @@index([bundleOrderId])
+}
+
+/// Discounts for a bundle type — reuses existing discount enum pattern
+model BundleDiscount {
+  id           String     @id @default(cuid())
+  bundleTypeId String
+  bundleType   BundleType @relation(fields: [bundleTypeId], references: [id], onDelete: Cascade)
+
+  name        String
+  description String?
+
+  scope       DiscountScope // PRODUCT | SHIPPING
+  condition   DiscountCondition // QUANTITY | SUBTOTAL
+  frequency   BundleFrequency? // if set, discount only applies at this frequency tier
+  minQuantity Int?
+  minSubtotal Float?
+
+  valueType       DiscountValueType // PERCENT | FIXED
+  discountPercent Float?
+  discountAmount  Float?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([bundleTypeId])
+}
+
+/// Audit log of customer-initiated bundle subscription actions
+/// (reschedule, skip, frequency change, etc.). Hangs off Membership
+/// so a customer's bundle audit trail lives alongside their existing
+/// MembershipEvent history (single per-customer-club audit trail).
+/// Per-event metadata (e.g. `{ previousNextBillingDate,
+/// newNextBillingDate, source }`) lives in `metadata` Json so each
+/// event type can carry its own shape without schema churn.
+model BundleSubscriptionEvent {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  membership   Membership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  membershipId String
+
+  type     BundleSubscriptionEventType
+  reason   String?
+  metadata Json?
+
+  @@index([membershipId, createdAt])
+}
+
+enum BundleSubscriptionEventType {
+  RESCHEDULED
+  SKIPPED
+  FREQUENCY_CHANGED
+  SELECTIONS_CHANGED
+  BUNDLE_TYPE_CHANGED
+  ADDRESS_CHANGED
+  PHONE_CHANGED
+  PAYMENT_CHANGED
+}
+
+enum ClubTz {
+  // Americas
+  America_St_Johns
+  America_Halifax
+  America_Toronto
+  America_Winnipeg
+  America_Edmonton
+  America_Vancouver
+  America_Whitehorse
+  America_Anchorage
+  Pacific_Honolulu
+  America_New_York
+  America_Chicago
+  America_Denver
+  America_Los_Angeles
+  America_Sao_Paulo
+  America_Argentina_Buenos_Aires
+  America_Lima
+  America_Bogota
+  America_Mexico_City
+  America_Caracas
+  America_Santiago
+  America_Montevideo
+  America_La_Paz
+  America_Puerto_Rico
+}
+
+enum Status {
+  INSTALLED
+  READY
+  REMOVED
+  ERROR
+  MODULE_APP_INSTALLED
+}
+
+enum BillingType {
+  monthly
+  percentage
+  oneTime
+}
+
+enum DiscountType {
+  oneTime
+  recurring
+}
+
+model MerchantEmailLog {
+  id        String            @id @default(cuid())
+  createdAt DateTime          @default(now())
+  shop      String
+  emailType MerchantEmailType
+  dedupKey  String
+  sentTo    String
+  success   Boolean           @default(true)
+  error     String?
+  metadata  Json?
+
+  @@unique([shop, emailType, dedupKey])
+  @@index([shop])
+  @@map("MerchantEmailLog")
+}
+
+enum MerchantEmailType {
+  WELCOME
+  CUSTOMIZATION_OPENING
+  CUSTOMIZATION_CLOSING
+  CUSTOMIZATION_CLOSED
+  RELEASE_CLOSING
+  RELEASE_SUMMARY
+}
+
+// ─── Customer Email ─────────────────────────────────────────────────
+
+enum CustomerEmailType {
+  MEMBER_WELCOME
+  MEMBERSHIP_PAUSED
+  MEMBERSHIP_RESUMED
+  MEMBERSHIP_CANCELLED
+  CUSTOMIZATION_OPEN
+  CUSTOMIZATION_REMINDER_72HR
+  CUSTOMIZATION_REMINDER_24HR
+  CUSTOMIZATION_CONFIRMED
+  PAYMENT_SUCCESSFUL
+  PAYMENT_FAILED
+  CHECKOUT_REQUIRED
+}
+
+model CustomerEmailLog {
+  id        String            @id @default(cuid())
+  createdAt DateTime          @default(now())
+  shop      String
+  emailType CustomerEmailType
+  dedupKey  String
+  sentTo    String
+  success   Boolean           @default(true)
+  error     String?
+  metadata  Json?
+
+  @@unique([shop, emailType, dedupKey])
+  @@index([shop])
+}
+
+model MerchantEmailSettings {
+  id             Int      @id @default(autoincrement())
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  shop           String   @unique
+  merchantId     Int      @unique
+  merchant       Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  logoUrl        String?
+  primaryColor   String?
+  secondaryColor String?
+  supportEmail   String?
+}
+
+// ─── Club Migration ────────────────────────────────────────────────
+
+model ClubMigration {
+  id        String          @id @default(cuid())
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  clubId    String
+  club      Club            @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  shop      String
+  status    MigrationStatus @default(PENDING)
+
+  // Progress counts (updated by worker after each phase)
+  totalRecords           Int @default(0)
+  resolvedCount          Int @default(0)
+  membershipCreatedCount Int @default(0)
+  paymentResolvedCount   Int @default(0)
+  contractCreatedCount   Int @default(0)
+  errorCount             Int @default(0)
+
+  // Merchant config choices
+  contractStrategy  MigrationContractStrategy @default(EAGER)
+  gatewayType       String? // "stripe" | "braintree" | "authorize_net" — only if CSV has gateway tokens
+  gracePeriodDays   Int                       @default(0)
+  sendWelcomeEmails Boolean                   @default(false)
+
+  // File tracking
+  filename String? // original CSV filename for display
+
+  // Worker tracking
+  workerJobId String?
+  completedAt DateTime?
+  error       String?
+
+  records ClubMigrationRecord[]
+
+  @@index([clubId])
+  @@index([shop])
+}
+
+model ClubMigrationRecord {
+  id          String        @id @default(cuid())
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  migrationId String
+  migration   ClubMigration @relation(fields: [migrationId], references: [id], onDelete: Cascade)
+
+  // Source data from CSV
+  rowNumber               Int
+  email                   String
+  firstName               String?
+  lastName                String?
+  phone                   String?
+  csvShopifyCustomerId    String?
+  externalMemberNumber    String?
+  joinedAt                DateTime?
+  address1                String?
+  address2                String?
+  city                    String?
+  provinceCode            String?
+  countryCode             String?
+  zip                     String?
+  preferredDeliveryMethod DeliveryMethod?
+  notes                   String?
+  dateOfBirth             String? // AES-encrypted DOB (PII)
+  gatewayCustomerToken    String?
+  gatewayPaymentToken     String?
+
+  // Resolution state (populated by worker phases)
+  status                  MigrationRecordStatus @default(PENDING)
+  platformCustomerId      String?
+  customerResolution      CustomerResolution?
+  clubCustomerId          String?
+  membershipId            String?
+  platformPaymentMethodId String?
+  platformContractId      String?
+
+  // Status flags
+  paymentMethodExists   Boolean   @default(false)
+  checkoutLinkSent      Boolean   @default(false)
+  checkoutLinkSentAt    DateTime?
+  checkoutLinkSendCount Int       @default(0)
+  checkoutLink          String?
+  migrationCode         String? // unique per-record UUID used to validate migration checkout links
+  contractCreated       Boolean   @default(false)
+  welcomeEmailSent      Boolean   @default(false)
+
+  // Error tracking
+  error      String?
+  errorPhase String? // "validation" | "customer_resolve" | "membership_create" | "payment_resolve" | "contract_create"
+
+  @@unique([migrationId, email])
+  @@index([migrationId])
+  @@index([migrationId, status])
+  @@index([platformCustomerId])
+  @@index([migrationCode])
+}
+
+enum MigrationStatus {
+  PENDING
+  VALIDATING
+  RESOLVING_CUSTOMERS
+  CREATING_MEMBERSHIPS
+  RESOLVING_PAYMENTS
+  COLLECTING_PAYMENTS
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum MigrationContractStrategy {
+  EAGER // Create contracts even without payment method
+  WAIT_FOR_PAYMENT // Only create when payment method exists
+}
+
+enum MigrationRecordStatus {
+  PENDING
+  CUSTOMER_RESOLVED
+  MEMBERSHIP_CREATED
+  PAYMENT_RESOLVED
+  COMPLETED
+  ERROR
+  SKIPPED // existing membership found
+}
+
+enum CustomerResolution {
+  EXISTING_BY_ID // found by shopify_customer_id from CSV
+  EXISTING_BY_EMAIL // found via customerByIdentifier
+  CREATED // new customer created via customerCreate
+}
+
+// ─── GDPR ───────────────────────────────────────────────────────────
+
+model GDPRRequest {
+  id                 String    @id @default(cuid())
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  shop               String
+  merchantId         Int
+  merchant           Merchant  @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  type               String // "customer-redact", "customer-data-request", "shop-redact"
+  platformCustomerId String?
+  clubCustomerId     String?
+  instructions       String?
+  completed          Boolean   @default(false)
+  completedAt        DateTime?
+
+  @@index([shop])
+  @@index([type, completed])
+}
+
+// ─── Feature Flags ──────────────────────────────────────────────────
+
+model FeatureFlag {
+  id          Int      @id @default(autoincrement())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  key         String   @unique
+  enabled     Boolean  @default(false)
+  description String?
+}

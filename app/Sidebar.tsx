@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import {
   Badge,
   Box,
@@ -10,6 +10,7 @@ import {
   Grid,
   Heading,
   ScrollArea,
+  Select,
   Separator,
   VisuallyHidden,
 } from '@radix-ui/themes';
@@ -19,10 +20,27 @@ import { getEnvironment } from '@/lib/getEnvironment';
 import Logo from '@/app/svg/crush-suite-admin-logo.svg';
 import { ButtonLink } from './components/ButtonLink';
 
-export const Sidebar = ({ user }: { user?: SessionUser }) => {
-  if (!user) return null;
+type AppMode = 'compliance' | 'clubs' | 'seats';
 
+const getModeFromPathname = (pathname: string): AppMode => {
+  if (pathname.startsWith('/clubs')) return 'clubs';
+  if (pathname.startsWith('/seats')) return 'seats';
+  return 'compliance';
+};
+
+const modeRoots: Record<AppMode, string> = {
+  compliance: '/merchants',
+  clubs: '/clubs/merchants',
+  seats: '/seats',
+};
+
+export const Sidebar = ({ user }: { user?: SessionUser }) => {
   const environment = getEnvironment();
+  const pathname = usePathname();
+  const router = useRouter();
+  const mode = getModeFromPathname(pathname);
+
+  if (!user) return null;
 
   return (
     <Grid
@@ -58,34 +76,62 @@ export const Sidebar = ({ user }: { user?: SessionUser }) => {
           </Box>
           <VisuallyHidden>Crush Suite Admin</VisuallyHidden>
         </Heading>
+        <Select.Root size="1" value={mode} onValueChange={(value) => router.push(modeRoots[value as AppMode])}>
+          <Select.Trigger style={{ width: '100%' }} mb="3" />
+          <Select.Content>
+            <Select.Item value="compliance">Compliance</Select.Item>
+            <Select.Item value="clubs">Clubs</Select.Item>
+            <Select.Item value="seats">Seats</Select.Item>
+          </Select.Content>
+        </Select.Root>
         <Grid columns="1" gap="2" my="2">
-          <Flex align="center" justify="between" gap="2">
-            <NavItem href="/merchants" style={{ flexGrow: '2' }}>
-              Merchants
-            </NavItem>
-            <MerchantsDropdown />
-          </Flex>
-          <NavItem href="/products">Products</NavItem>
-          <NavItem href="/customers">Customers</NavItem>
-          <NavItem href="/orders">Orders</NavItem>
-          <NavItem href="/billing-plans">Billing Plans</NavItem>
-          <NavItem href="/discounts">Discounts</NavItem>
-          <NavItem href="/api-keys">API Keys</NavItem>
-          <Separator size="4" />
-          <Flex align="center" justify="between" gap="2">
-            <NavItem href="/users" style={{ flexGrow: '2' }}>
-              Admin Users
-            </NavItem>
-            <UsersDropdown />
-          </Flex>
-          <NavItem href="/tools">Tools</NavItem>
-          <NavItem href="/gdpr">GDPR</NavItem>
+          {mode === 'compliance' && <ComplianceNav />}
+          {mode === 'clubs' && <ClubsNav />}
+          {mode === 'seats' && <SeatsNav />}
         </Grid>
       </ScrollArea>
       <UserCard {...user} />
     </Grid>
   );
 };
+
+const ComplianceNav = () => (
+  <>
+    <Flex align="center" justify="between" gap="2">
+      <NavItem href="/merchants" style={{ flexGrow: '2' }}>
+        Merchants
+      </NavItem>
+      <MerchantsDropdown />
+    </Flex>
+    <NavItem href="/products">Products</NavItem>
+    <NavItem href="/customers">Customers</NavItem>
+    <NavItem href="/orders">Orders</NavItem>
+    <NavItem href="/billing-plans">Billing Plans</NavItem>
+    <NavItem href="/discounts">Discounts</NavItem>
+    <NavItem href="/api-keys">API Keys</NavItem>
+    <Separator size="4" />
+    <Flex align="center" justify="between" gap="2">
+      <NavItem href="/users" style={{ flexGrow: '2' }}>
+        Admin Users
+      </NavItem>
+      <UsersDropdown />
+    </Flex>
+    <NavItem href="/tools">Tools</NavItem>
+    <NavItem href="/gdpr">GDPR</NavItem>
+  </>
+);
+
+const ClubsNav = () => (
+  <>
+    <NavItem href="/clubs/merchants">Merchants</NavItem>
+  </>
+);
+
+const SeatsNav = () => (
+  <>
+    <NavItem href="/seats">Coming Soon</NavItem>
+  </>
+);
 
 const MerchantsDropdown = () => {
   const [open, setOpen] = useState(false);
