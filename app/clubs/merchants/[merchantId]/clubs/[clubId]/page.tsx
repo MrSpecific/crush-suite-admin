@@ -73,6 +73,19 @@ export default async function Page({
       Membership: {
         select: { status: true },
       },
+      BundleType: {
+        orderBy: { orderPriority: 'asc' },
+        select: {
+          id: true,
+          name: true,
+          mode: true,
+          status: true,
+          minItems: true,
+          maxItems: true,
+          createdAt: true,
+          _count: { select: { subscriptions: true, products: true } },
+        },
+      },
     },
   });
 
@@ -204,7 +217,7 @@ export default async function Page({
         </Card>
       )}
 
-      <Box>
+      <Box mb="6">
         <Heading size="4" mb="3">
           Recent Releases
         </Heading>
@@ -216,6 +229,54 @@ export default async function Page({
           </Text>
         )}
       </Box>
+
+      {club.clubType === 'bundle_subscription' && (
+        <Box>
+          <Heading size="4" mb="3">
+            Bundle Types ({club.BundleType.length})
+          </Heading>
+          {club.BundleType.length > 0 ? (
+            <DataTable
+              headers={[
+                { id: 'name', title: 'Name' },
+                { id: 'mode', title: 'Mode' },
+                {
+                  id: 'status',
+                  title: 'Status',
+                  formatter: (v: string) => (
+                    <Badge color={v === 'active' ? 'green' : 'gray'} variant="soft">{v}</Badge>
+                  ),
+                },
+                {
+                  id: 'minItems',
+                  title: 'Items',
+                  formatter: (min: number, row: any) => `${min}–${row.maxItems}`,
+                },
+                {
+                  id: '_count',
+                  title: 'Products',
+                  formatter: (v: { products: number }) => v.products.toString(),
+                },
+                {
+                  id: '_count',
+                  title: 'Subscribers',
+                  formatter: (v: { subscriptions: number }) => v.subscriptions.toString(),
+                },
+                { id: 'createdAt', title: 'Created', formatter: dateFormatter },
+                { type: 'actions' as const, title: 'Actions' },
+              ]}
+              data={club.BundleType}
+              Actions={({ id }: { id: string }) => (
+                <ButtonLink href={`/clubs/merchants/${merchantId}/clubs/${clubId}/bundles/${id}`}>
+                  View
+                </ButtonLink>
+              )}
+            />
+          ) : (
+            <Text color="gray" size="2">No bundle types configured.</Text>
+          )}
+        </Box>
+      )}
     </PageLayout>
   );
 }

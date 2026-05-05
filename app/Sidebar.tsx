@@ -17,38 +17,33 @@ import {
 } from '@radix-ui/themes';
 import { UserCard } from './UserCard';
 import { Link } from '@/app/components/Link';
-import { getEnvironment } from '@/lib/getEnvironment';
+import { getEnvironment, type App } from '@/lib/getEnvironment';
 import Logo from '@/app/svg/crush-suite-admin-logo.svg';
 import { ButtonLink } from './components/ButtonLink';
+import type { RadixColor } from '@/types/radix-ui';
 
-type AppMode = 'compliance' | 'clubs' | 'seats';
-
-const getModeFromPathname = (pathname: string): AppMode => {
+const getModeFromPathname = (pathname: string): App => {
   if (pathname.startsWith('/clubs')) return 'clubs';
   if (pathname.startsWith('/seats')) return 'seats';
   return 'compliance';
 };
 
-const modeRoots: Record<AppMode, string> = {
+const modeRoots: Record<App, string> = {
   compliance: '/merchants',
   clubs: '/clubs/merchants',
   seats: '/seats',
 };
 
-const modeLabels: Record<AppMode, string> = {
-  compliance: 'Compliance',
-  clubs: 'Clubs',
-  seats: 'Seats',
-};
-
 export const Sidebar = ({ user }: { user?: SessionUser }) => {
-  const environment = getEnvironment();
   const pathname = usePathname();
-  const router = useRouter();
   const mode = getModeFromPathname(pathname);
-  const [pendingMode, setPendingMode] = useState<AppMode | null>(null);
+  const environment = getEnvironment(mode);
+  const router = useRouter();
+  const [pendingMode, setPendingMode] = useState<App | null>(null);
   const [isModeTransitionPending, startModeTransition] = useTransition();
   const selectedMode = pendingMode ?? mode;
+  const currentAppColor = environment.appColorScheme.color;
+  const selectedAppColor = environment.apps[selectedMode].color;
   const isModeLoading = pendingMode !== null || isModeTransitionPending;
 
   useEffect(() => {
@@ -58,7 +53,7 @@ export const Sidebar = ({ user }: { user?: SessionUser }) => {
   }, [mode, pendingMode]);
 
   const handleModeChange = (value: string) => {
-    const nextMode = value as AppMode;
+    const nextMode = value as App;
 
     if (nextMode === mode) return;
 
@@ -79,7 +74,11 @@ export const Sidebar = ({ user }: { user?: SessionUser }) => {
       maxHeight="100vh"
       position="sticky"
       top="0"
-      style={{ backgroundColor: 'var(--gray-2)' }}
+      style={{
+        backgroundColor: `var(--${currentAppColor}-2)`,
+        borderRight: `1px solid var(--${currentAppColor}-5)`,
+        transition: 'background-color 150ms ease, border-color 150ms ease',
+      }}
     >
       <ScrollArea>
         <Heading as="h2" size="4" mb="3">
@@ -112,10 +111,10 @@ export const Sidebar = ({ user }: { user?: SessionUser }) => {
           onValueChange={handleModeChange}
           disabled={isModeLoading}
         >
-          <Select.Trigger style={{ width: '100%' }} mb="3">
+          <Select.Trigger color={selectedAppColor} style={{ width: '100%' }} mb="3">
             <Flex align="center" gap="2">
               {isModeLoading && <Spinner size="1" />}
-              <span>{modeLabels[selectedMode]}</span>
+              <span>{environment.apps[selectedMode].label}</span>
             </Flex>
           </Select.Trigger>
           <Select.Content>
@@ -125,9 +124,9 @@ export const Sidebar = ({ user }: { user?: SessionUser }) => {
           </Select.Content>
         </Select.Root>
         <Grid columns="1" gap="2" my="2">
-          {mode === 'compliance' && <ComplianceNav />}
-          {mode === 'clubs' && <ClubsNav />}
-          {mode === 'seats' && <SeatsNav />}
+          {mode === 'compliance' && <ComplianceNav color={currentAppColor} />}
+          {mode === 'clubs' && <ClubsNav color={currentAppColor} />}
+          {mode === 'seats' && <SeatsNav color={currentAppColor} />}
         </Grid>
       </ScrollArea>
       <UserCard {...user} />
@@ -135,48 +134,80 @@ export const Sidebar = ({ user }: { user?: SessionUser }) => {
   );
 };
 
-const ComplianceNav = () => (
+const ComplianceNav = ({ color }: { color: RadixColor }) => (
   <>
     <Flex align="center" justify="between" gap="2">
-      <NavItem href="/merchants" style={{ flexGrow: '2' }}>
+      <NavItem href="/merchants" color={color} style={{ flexGrow: '2' }}>
         Merchants
       </NavItem>
       <MerchantsDropdown />
     </Flex>
-    <NavItem href="/products">Products</NavItem>
-    <NavItem href="/customers">Customers</NavItem>
-    <NavItem href="/orders">Orders</NavItem>
-    <NavItem href="/billing-plans">Billing Plans</NavItem>
-    <NavItem href="/discounts">Discounts</NavItem>
-    <NavItem href="/api-keys">API Keys</NavItem>
+    <NavItem href="/products" color={color}>
+      Products
+    </NavItem>
+    <NavItem href="/customers" color={color}>
+      Customers
+    </NavItem>
+    <NavItem href="/orders" color={color}>
+      Orders
+    </NavItem>
+    <NavItem href="/billing-plans" color={color}>
+      Billing Plans
+    </NavItem>
+    <NavItem href="/discounts" color={color}>
+      Discounts
+    </NavItem>
+    <NavItem href="/api-keys" color={color}>
+      API Keys
+    </NavItem>
     <Separator size="4" />
     <Flex align="center" justify="between" gap="2">
-      <NavItem href="/users" style={{ flexGrow: '2' }}>
+      <NavItem href="/users" color={color} style={{ flexGrow: '2' }}>
         Admin Users
       </NavItem>
       <UsersDropdown />
     </Flex>
-    <NavItem href="/tools">Tools</NavItem>
-    <NavItem href="/gdpr">GDPR</NavItem>
+    <NavItem href="/tools" color={color}>
+      Tools
+    </NavItem>
+    <NavItem href="/gdpr" color={color}>
+      GDPR
+    </NavItem>
   </>
 );
 
-const ClubsNav = () => (
+const ClubsNav = ({ color }: { color: RadixColor }) => (
   <>
-    <NavItem href="/clubs/all">All Clubs</NavItem>
-    <NavItem href="/clubs/merchants">Merchants</NavItem>
-    <NavItem href="/clubs/members">Members</NavItem>
+    <NavItem href="/clubs/all" color={color}>
+      All Clubs
+    </NavItem>
+    <NavItem href="/clubs/merchants" color={color}>
+      Merchants
+    </NavItem>
+    <NavItem href="/clubs/members" color={color}>
+      Members
+    </NavItem>
     <Separator size="4" />
-    <NavItem href="/clubs/billing-plans">Billing Plans</NavItem>
-    <NavItem href="/clubs/migrations">Migrations</NavItem>
-    <NavItem href="/clubs/gdpr">GDPR</NavItem>
-    <NavItem href="/clubs/feature-flags">Feature Flags</NavItem>
+    <NavItem href="/clubs/billing-plans" color={color}>
+      Billing Plans
+    </NavItem>
+    <NavItem href="/clubs/migrations" color={color}>
+      Migrations
+    </NavItem>
+    <NavItem href="/clubs/gdpr" color={color}>
+      GDPR
+    </NavItem>
+    <NavItem href="/clubs/feature-flags" color={color}>
+      Feature Flags
+    </NavItem>
   </>
 );
 
-const SeatsNav = () => (
+const SeatsNav = ({ color }: { color: RadixColor }) => (
   <>
-    <NavItem href="/seats">Coming Soon</NavItem>
+    <NavItem href="/seats" color={color}>
+      Coming Soon
+    </NavItem>
   </>
 );
 
@@ -257,12 +288,14 @@ export const NavItem = ({
   children,
   icon,
   active: defaultActive,
+  color = 'ruby',
   style,
 }: {
   href: string;
   children: React.ReactNode;
   icon?: React.ReactNode;
   active?: boolean;
+  color?: RadixColor;
   style?: React.CSSProperties;
 }) => {
   const pathname = usePathname();
@@ -278,7 +311,7 @@ export const NavItem = ({
       href={href}
       variant="soft"
       size="2"
-      color={active ? 'ruby' : loading ? 'teal' : 'gray'}
+      color={active || loading ? color : 'gray'}
       style={style}
       onClick={() => setLoading(true)}
     >

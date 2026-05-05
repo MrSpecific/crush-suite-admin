@@ -64,7 +64,9 @@ export default async function Page({ params }: { params: { id: string } }) {
       id: 'status',
       title: 'Status',
       formatter: (value: string) => (
-        <Badge color={statusColor[value] ?? 'gray'} variant="soft">{value}</Badge>
+        <Badge color={statusColor[value] ?? 'gray'} variant="soft">
+          {value}
+        </Badge>
       ),
     },
     { id: 'createdAt', title: 'Joined', formatter: dateFormatter },
@@ -74,17 +76,29 @@ export default async function Page({ params }: { params: { id: string } }) {
   return (
     <PageLayout
       heading={plan.name}
-      actions={[{ label: 'Back to Billing Plans', href: '/clubs/billing-plans', variant: 'soft', color: 'gray' }]}
+      actions={[
+        {
+          label: 'Back to Billing Plans',
+          href: '/clubs/billing-plans',
+          variant: 'soft',
+          color: 'gray',
+        },
+      ]}
     >
       <Grid columns={{ initial: '1', md: '2' }} gap="4" mb="6">
         <Card>
-          <Heading size="3" mb="3">Plan Details</Heading>
+          <Heading size="3" mb="3">
+            Plan Details
+          </Heading>
           <QuickDataList
             data={[
               { label: 'Type', value: plan.type },
               { label: 'Price', value: `$${plan.price.toFixed(2)} / mo` },
               { label: 'Currency', value: plan.currencyCode },
-              { label: 'Trial Days', value: plan.trialDays > 0 ? plan.trialDays.toString() : 'None' },
+              {
+                label: 'Trial Days',
+                value: plan.trialDays > 0 ? plan.trialDays.toString() : 'None',
+              },
               { label: 'Description', value: plan.description },
               { label: 'Notes', value: plan.notes },
               { label: 'Created', value: dateFormatter(plan.createdAt) },
@@ -94,14 +108,17 @@ export default async function Page({ params }: { params: { id: string } }) {
         </Card>
 
         <Card>
-          <Heading size="3" mb="3">Usage Billing</Heading>
+          <Heading size="3" mb="3">
+            Usage Billing
+          </Heading>
           <QuickDataList
             data={[
               {
                 label: 'Per-Use Rate',
-                value: plan.perUseUnits === 'percent'
-                  ? `${(plan.perUsePrice * 100).toFixed(2)}%`
-                  : `$${plan.perUsePrice.toFixed(2)}`,
+                value:
+                  plan.perUseUnits === 'percent'
+                    ? `${(plan.perUsePrice * 100).toFixed(2)}%`
+                    : `$${plan.perUsePrice.toFixed(2)}`,
               },
               { label: 'Units', value: plan.perUseUnits },
               {
@@ -110,14 +127,18 @@ export default async function Page({ params }: { params: { id: string } }) {
               },
               {
                 label: 'Cap',
-                value: plan.perUseCap > 0 ? `$${plan.perUseCap.toFixed(2)}` : 'None',
+                value:
+                  plan.perUseCap > 0
+                    ? `$${plan.perUseCap.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                    : 'None',
               },
               { label: 'Terms', value: plan.perUseTerms },
               {
                 label: 'Accessible Stores',
-                value: plan.accessibleStores.length > 0
-                  ? plan.accessibleStores.join(', ')
-                  : 'All stores',
+                value:
+                  plan.accessibleStores.length > 0
+                    ? plan.accessibleStores.join(', ')
+                    : 'All stores',
               },
             ]}
           />
@@ -131,7 +152,9 @@ export default async function Page({ params }: { params: { id: string } }) {
         {plan.merchants.length > 0 ? (
           <DataTable headers={merchantHeaders} data={plan.merchants} Actions={MerchantActions} />
         ) : (
-          <Text color="gray" size="2">No merchants on this plan.</Text>
+          <Text color="gray" size="2">
+            No merchants on this plan.
+          </Text>
         )}
       </Box>
     </PageLayout>

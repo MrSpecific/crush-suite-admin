@@ -3,8 +3,8 @@ import { PageLayout } from '@/app/components/PageLayout';
 import { QuickDataList } from '@/app/components/QuickDataList';
 import { DataTable } from '@/app/components/DataTable';
 import { NotFound } from '@/app/components/NotFound';
-import { Badge, Box, Card, Flex, Grid, Heading } from '@radix-ui/themes';
-import { clubStatusFormatter, clubTypeFormatter, dateFormatter } from '@/lib/formatters';
+import { Badge, Box, Card, Flex, Grid, Heading, Text } from '@radix-ui/themes';
+import { clubStatusFormatter, clubTypeFormatter, dateFormatter, dateTimeFormatter } from '@/lib/formatters';
 import type { RadixColor } from '@/types/radix-ui';
 import { ButtonLink } from '@/app/components/ButtonLink';
 
@@ -40,6 +40,18 @@ export default async function Page({ params }: { params: { merchantId: string } 
       AppBillingPlan: {
         select: { id: true, name: true, price: true, type: true },
       },
+      subscriptionDiscount: {
+        select: {
+          id: true,
+          description: true,
+          value: true,
+          discountFixed: true,
+          discountPercent: true,
+          discountType: true,
+          uses: true,
+          durationIntervals: true,
+        },
+      },
       Club: {
         orderBy: { createdAt: 'desc' },
         select: {
@@ -56,6 +68,13 @@ export default async function Page({ params }: { params: { merchantId: string } 
   });
 
   if (!merchant) return <NotFound message="Merchant not found" />;
+
+  const emailLogs = await prismaClubs.merchantEmailLog.findMany({
+    where: { shop: merchant.shop },
+    orderBy: { createdAt: 'desc' },
+    take: 10,
+    select: { id: true, emailType: true, sentTo: true, success: true, error: true, createdAt: true },
+  });
 
   const statusOpt = merchantStatusOptions.find((o) => o.value === merchant.status) ?? {
     label: merchant.status,
@@ -130,11 +149,58 @@ export default async function Page({ params }: { params: { merchantId: string } 
         </Card>
       </Grid>
 
-      <Box>
+      <Box mb="6">
         <Flex justify="between" align="center" mb="3">
           <Heading size="4">Clubs</Heading>
         </Flex>
         <DataTable headers={clubHeaders} data={merchant.Club} Actions={ClubActions} />
+      </Box>
+
+      {merchant.subscriptionDiscount && (
+        <Card mb="6">
+          <Heading size="3" mb="3">Subscription Discount</Heading>
+          <QuickDataList
+            data={[
+              { label: 'Description', value: merchant.subscriptionDiscount.description },
+              { label: 'Value', value: merchant.subscriptionDiscount.value },
+              { label: 'Fixed Amount', value: `$${merchant.subscriptionDiscount.discountFixed.toFixed(2)}` },
+              { label: 'Percent', value: `${(merchant.subscriptionDiscount.discountPercent * 100).toFixed(1)}%` },
+              { label: 'Type', value: merchant.subscriptionDiscount.discountType },
+              { label: 'Uses', value: merchant.subscriptionDiscount.uses.toString() },
+              { label: 'Duration', value: `${merchant.subscriptionDiscount.durationIntervals} intervals` },
+            ]}
+          />
+        </Card>
+      )}
+
+      <Box>
+        <Heading size="4" mb="3">Recent Merchant Emails</Heading>
+        {emailLogs.length > 0 ? (
+          <DataTable
+            headers={[
+              { id: 'emailType', title: 'Type' },
+              { id: 'sentTo', title: 'Sent To' },
+              {
+                id: 'success',
+                title: 'Status',
+                formatter: (v: boolean) => (
+                  <Badge color={v ? 'green' : 'red'} variant="soft" size="1">
+                    {v ? 'Sent' : 'Failed'}
+                  </Badge>
+                ),
+              },
+              {
+                id: 'error',
+                title: 'Error',
+                formatter: (v: string | null) => v ?? '—',
+              },
+              { id: 'createdAt', title: 'Sent At', formatter: dateTimeFormatter },
+            ]}
+            data={emailLogs}
+          />
+        ) : (
+          <Text color="gray" size="2">No email logs for this merchant.</Text>
+        )}
       </Box>
     </PageLayout>
   );

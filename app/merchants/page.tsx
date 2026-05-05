@@ -23,10 +23,9 @@ const merchantStatusOptions: { value: Status; label: string; color: RadixColor }
 const Actions = ({ ...props }) => {
   return (
     <Flex gap="2">
-      <EditDialog title="Edit Merchant" trigger="Edit">
+      {/* <EditDialog title="Edit Merchant" trigger="Edit">
         Hello
-        {/* {JSON.stringify(props)} */}
-      </EditDialog>
+      </EditDialog> */}
       <ButtonLink href={`/merchants/${props.id}`}>View</ButtonLink>
     </Flex>
   );
