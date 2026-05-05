@@ -76,7 +76,11 @@ export const Sidebar = ({ user }: { user?: SessionUser }) => {
           </Box>
           <VisuallyHidden>Crush Suite Admin</VisuallyHidden>
         </Heading>
-        <Select.Root size="1" value={mode} onValueChange={(value) => router.push(modeRoots[value as AppMode])}>
+        <Select.Root
+          size="1"
+          value={mode}
+          onValueChange={(value) => router.push(modeRoots[value as AppMode])}
+        >
           <Select.Trigger style={{ width: '100%' }} mb="3" />
           <Select.Content>
             <Select.Item value="compliance">Compliance</Select.Item>
@@ -123,8 +127,8 @@ const ComplianceNav = () => (
 
 const ClubsNav = () => (
   <>
-    <NavItem href="/clubs/all">All Clubs</NavItem>
     <NavItem href="/clubs/merchants">Merchants</NavItem>
+    <NavItem href="/clubs/all">All Clubs</NavItem>
   </>
 );
 
