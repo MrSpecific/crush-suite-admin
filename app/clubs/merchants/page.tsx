@@ -6,16 +6,9 @@ import { queryPagination } from '@/lib/queryPagination';
 import { dateFormatter } from '@/lib/formatters';
 import { DataFilter } from '@/app/components/DataFilter';
 import { Badge } from '@radix-ui/themes';
-import type { RadixColor } from '@/types/radix-ui';
 import { ButtonLink } from '@/app/components/ButtonLink';
 import { Prisma } from '@/generated/prisma/clubs';
-
-const merchantStatusOptions: { value: string; label: string; color: RadixColor }[] = [
-  { value: 'READY', label: 'Ready', color: 'green' },
-  { value: 'INSTALLED', label: 'Installed', color: 'orange' },
-  { value: 'REMOVED', label: 'Removed', color: 'gray' },
-  { value: 'ERROR', label: 'Error', color: 'red' },
-];
+import { clubsMerchantStatusMetaData } from '@/lib/metaData';
 
 const Actions = ({ id }: { id: number }) => (
   <ButtonLink href={`/clubs/merchants/${id}`}>View</ButtonLink>
@@ -48,11 +41,8 @@ export default async function Page({ searchParams }: { searchParams: PageSearchP
       id: 'status',
       title: 'Status',
       formatter: (value: string) => {
-        const opt = merchantStatusOptions.find((o) => o.value === value) ?? {
-          label: value,
-          color: 'gray' as RadixColor,
-        };
-        return <Badge color={opt.color}>{opt.label}</Badge>;
+        const meta = clubsMerchantStatusMetaData[value as keyof typeof clubsMerchantStatusMetaData] ?? { label: value, color: 'gray' };
+        return <Badge color={meta.color}>{meta.label}</Badge>;
       },
     },
     { id: 'createdAt', title: 'Created At', formatter: dateFormatter },

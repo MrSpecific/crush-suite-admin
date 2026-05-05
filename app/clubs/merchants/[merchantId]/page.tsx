@@ -5,15 +5,8 @@ import { DataTable } from '@/app/components/DataTable';
 import { NotFound } from '@/app/components/NotFound';
 import { Badge, Box, Card, Flex, Grid, Heading, Text } from '@radix-ui/themes';
 import { clubStatusFormatter, clubTypeFormatter, dateFormatter, dateTimeFormatter } from '@/lib/formatters';
-import type { RadixColor } from '@/types/radix-ui';
 import { ButtonLink } from '@/app/components/ButtonLink';
-
-const merchantStatusOptions: { value: string; label: string; color: RadixColor }[] = [
-  { value: 'READY', label: 'Ready', color: 'green' },
-  { value: 'INSTALLED', label: 'Installed', color: 'orange' },
-  { value: 'REMOVED', label: 'Removed', color: 'gray' },
-  { value: 'ERROR', label: 'Error', color: 'red' },
-];
+import { clubsMerchantStatusMetaData, merchantEmailTypeMetaData } from '@/lib/metaData';
 
 const ClubActions = ({ id, merchantId }: { id: string; merchantId: number }) => (
   <ButtonLink href={`/clubs/merchants/${merchantId}/clubs/${id}`}>View</ButtonLink>
@@ -76,10 +69,7 @@ export default async function Page({ params }: { params: { merchantId: string } 
     select: { id: true, emailType: true, sentTo: true, success: true, error: true, createdAt: true },
   });
 
-  const statusOpt = merchantStatusOptions.find((o) => o.value === merchant.status) ?? {
-    label: merchant.status,
-    color: 'gray' as RadixColor,
-  };
+  const statusMeta = clubsMerchantStatusMetaData[merchant.status] ?? { label: merchant.status, color: 'gray' };
 
   const clubHeaders = [
     { id: 'name', title: 'Name' },
@@ -115,7 +105,7 @@ export default async function Page({ params }: { params: { merchantId: string } 
               { label: 'State', value: merchant.platformStateCode },
               {
                 label: 'Status',
-                children: <Badge color={statusOpt.color}>{statusOpt.label}</Badge>,
+                children: <Badge color={statusMeta.color}>{statusMeta.label}</Badge>,
               },
               { label: 'Billing Plan', value: merchant.AppBillingPlan?.name },
               { label: 'Plan Price', value: merchant.AppBillingPlan?.price != null ? `$${merchant.AppBillingPlan.price.toFixed(2)} / mo` : undefined },
@@ -178,7 +168,14 @@ export default async function Page({ params }: { params: { merchantId: string } 
         {emailLogs.length > 0 ? (
           <DataTable
             headers={[
-              { id: 'emailType', title: 'Type' },
+              {
+                id: 'emailType',
+                title: 'Type',
+                formatter: (v: string) => {
+                  const meta = merchantEmailTypeMetaData[v as keyof typeof merchantEmailTypeMetaData] ?? { label: v, color: 'gray' };
+                  return <Badge color={meta.color} variant="soft" size="1">{meta.label}</Badge>;
+                },
+              },
               { id: 'sentTo', title: 'Sent To' },
               {
                 id: 'success',

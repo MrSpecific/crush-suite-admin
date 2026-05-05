@@ -84,6 +84,8 @@ export default async function Page({ params }: { params: { id: string } }) {
     { type: 'actions' as const, title: 'Actions' },
   ];
 
+  const memberships = customer.Membership.map((m) => ({ ...m, merchantId: m.club.merchantId }));
+
   const fullName = [customer.firstName, customer.lastName].filter(Boolean).join(' ') || '—';
 
   return (
@@ -127,7 +129,7 @@ export default async function Page({ params }: { params: { id: string } }) {
         {customer.Membership.length > 0 ? (
           <DataTable
             headers={membershipHeaders}
-            data={customer.Membership}
+            data={memberships}
             Actions={MembershipActions}
           />
         ) : (

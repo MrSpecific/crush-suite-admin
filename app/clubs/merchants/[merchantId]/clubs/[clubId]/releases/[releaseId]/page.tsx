@@ -377,13 +377,63 @@ export default async function Page({
 
       {/* Discounts */}
       {release.releaseDiscounts.length > 0 && (
-        <Box>
+        <Box mb="6">
           <Heading size="4" mb="3">
             Discounts ({release.releaseDiscounts.length})
           </Heading>
           <DataTable headers={discountHeaders} data={release.releaseDiscounts} />
         </Box>
       )}
+
+      {/* Release Orders */}
+      <Box>
+        <Heading size="4" mb="3">
+          Orders ({release._count.ReleaseOrder})
+        </Heading>
+        {releaseOrders.length > 0 ? (
+          <DataTable
+            headers={[
+              { id: 'platformCustomerId', title: 'Customer ID', as: 'code' as const },
+              {
+                id: 'skippedAt',
+                title: 'Status',
+                formatter: (skippedAt: Date | null, row: any) => {
+                  if (skippedAt) return <Badge color="gray" variant="soft">Skipped</Badge>;
+                  if (row.platformOrderId) return <Badge color="green" variant="soft">Ordered</Badge>;
+                  return <Badge color="orange" variant="soft">Pending</Badge>;
+                },
+              },
+              { id: 'platformOrderId', title: 'Order ID', as: 'code' as const },
+              { id: 'deliveryMethod', title: 'Delivery' },
+              {
+                id: 'subtotal',
+                title: 'Subtotal',
+                formatter: (v: number) => `$${v.toFixed(2)}`,
+              },
+              {
+                id: 'discountAmount',
+                title: 'Discount',
+                formatter: (v: number) => (v > 0 ? `-$${v.toFixed(2)}` : '—'),
+              },
+              {
+                id: 'deliveryPrice',
+                title: 'Shipping',
+                formatter: (v: number) => (v > 0 ? `$${v.toFixed(2)}` : '—'),
+              },
+              { id: 'orderCreatedAt', title: 'Ordered At', formatter: (v: Date | null) => v ? dateTimeFormatter(v) : '—' },
+              { id: 'createdAt', title: 'Created', formatter: dateFormatter },
+            ]}
+            data={releaseOrders}
+          />
+        ) : (
+          <Text color="gray" size="2">No orders for this release yet.</Text>
+        )}
+        {release._count.ReleaseOrder > 100 && (
+          <Text size="1" color="gray" mt="2" as="p">
+            Showing first 100 of {release._count.ReleaseOrder} orders.
+          </Text>
+        )}
+      </Box>
     </PageLayout>
   );
 }

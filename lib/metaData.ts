@@ -1,7 +1,7 @@
 import { OrderStatus, ProductCategory } from '@prisma/client';
 import type { RadixColor } from '@/types/radix-ui';
 import { DOMElement } from 'react';
-import type { ClubStatus, ClubType } from '../generated/prisma/clubs';
+import type { ClubStatus, ClubType, Status as ClubsMerchantStatus, MerchantEmailType } from '../generated/prisma/clubs';
 
 type EnumMetaData = {
   label: string;
@@ -69,5 +69,42 @@ export const clubStatusMetaData: Record<ClubStatus, EnumMetaData> = {
     label: 'Archived',
     color: 'orange',
     description: 'No longer active',
+  },
+};
+
+export const merchantEmailTypeMetaData: Record<MerchantEmailType, EnumMetaData> = {
+  WELCOME: { label: 'Welcome', color: 'green' },
+  CUSTOMIZATION_OPENING: { label: 'Customization Opening', color: 'blue' },
+  CUSTOMIZATION_CLOSING: { label: 'Customization Closing', color: 'orange' },
+  CUSTOMIZATION_CLOSED: { label: 'Customization Closed', color: 'gray' },
+  RELEASE_CLOSING: { label: 'Release Closing', color: 'orange' },
+  RELEASE_SUMMARY: { label: 'Release Summary', color: 'purple' },
+};
+
+export const clubsMerchantStatusMetaData: Record<ClubsMerchantStatus, EnumMetaData> = {
+  READY: {
+    label: 'Ready',
+    color: 'green',
+    description: 'App installed and fully configured',
+  },
+  INSTALLED: {
+    label: 'Installed',
+    color: 'orange',
+    description: 'App installed but setup not complete',
+  },
+  REMOVED: {
+    label: 'Removed',
+    color: 'gray',
+    description: 'App uninstalled',
+  },
+  ERROR: {
+    label: 'Error',
+    color: 'red',
+    description: 'App encountered an error',
+  },
+  MODULE_APP_INSTALLED: {
+    label: 'Module Installed',
+    color: 'blue',
+    description: 'Module app installed',
   },
 };

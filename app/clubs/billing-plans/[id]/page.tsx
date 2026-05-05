@@ -6,14 +6,7 @@ import { NotFound } from '@/app/components/NotFound';
 import { Badge, Box, Card, Grid, Heading, Text } from '@radix-ui/themes';
 import { dateFormatter } from '@/lib/formatters';
 import { ButtonLink } from '@/app/components/ButtonLink';
-import type { RadixColor } from '@/types/radix-ui';
-
-const statusColor: Record<string, RadixColor> = {
-  READY: 'green',
-  INSTALLED: 'orange',
-  REMOVED: 'gray',
-  ERROR: 'red',
-};
+import { clubsMerchantStatusMetaData } from '@/lib/metaData';
 
 const MerchantActions = ({ id }: { id: number }) => (
   <ButtonLink href={`/clubs/merchants/${id}`}>View</ButtonLink>
@@ -63,11 +56,10 @@ export default async function Page({ params }: { params: { id: string } }) {
     {
       id: 'status',
       title: 'Status',
-      formatter: (value: string) => (
-        <Badge color={statusColor[value] ?? 'gray'} variant="soft">
-          {value}
-        </Badge>
-      ),
+      formatter: (value: string) => {
+        const meta = clubsMerchantStatusMetaData[value as keyof typeof clubsMerchantStatusMetaData] ?? { label: value, color: 'gray' };
+        return <Badge color={meta.color} variant="soft">{meta.label}</Badge>;
+      },
     },
     { id: 'createdAt', title: 'Joined', formatter: dateFormatter },
     { type: 'actions' as const, title: 'Actions' },
