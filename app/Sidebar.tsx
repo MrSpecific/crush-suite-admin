@@ -167,9 +167,6 @@ const ComplianceNav = ({ color }: { color: RadixColor }) => (
     <NavItem href="/api-keys" color={color}>
       API Keys
     </NavItem>
-    <NavItem href="/issues" color={color}>
-      App Issues
-    </NavItem>
     <NavItem href="/fulfillments" color={color}>
       Fulfillments
     </NavItem>
@@ -179,19 +176,29 @@ const ComplianceNav = ({ color }: { color: RadixColor }) => (
     <NavItem href="/bulk-operations" color={color}>
       Bulk Operations
     </NavItem>
+
     <Separator size="4" />
+
+    {/* <Flex align="center" justify="between" gap="2">
+      <NavItem href="/users" color={color} style={{ flexGrow: '2' }}>
+        Admin
+      </NavItem>
+    </Flex> */}
+    <AdminDropdown color={color} />
+
     <Flex align="center" justify="between" gap="2">
       <NavItem href="/users" color={color} style={{ flexGrow: '2' }}>
         Admin Users
       </NavItem>
       <UsersDropdown />
     </Flex>
-    <NavItem href="/tools" color={color}>
+
+    {/* <NavItem href="/tools" color={color}>
       Tools
     </NavItem>
     <NavItem href="/gdpr" color={color}>
       GDPR
-    </NavItem>
+    </NavItem> */}
   </>
 );
 
@@ -297,6 +304,38 @@ const UsersDropdown = () => {
         <DropdownMenu.Item shortcut="⌘ ⌫" color="red">
           Delete
         </DropdownMenu.Item> */}
+      </DropdownMenu.Content>
+    </DropdownMenu.Root>
+  );
+};
+
+const AdminDropdown = ({ color }: { color: RadixColor }) => {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <DropdownMenu.Root open={open} onOpenChange={setOpen}>
+      <DropdownMenu.Trigger>
+        <Button variant="soft" color={color ?? 'gray'}>
+          Admin <DropdownMenu.TriggerIcon />
+        </Button>
+      </DropdownMenu.Trigger>
+
+      <DropdownMenu.Content>
+        <DropdownMenu.Item asChild onSelect={() => setOpen(false)}>
+          <Link href="/tools" color={color}>
+            Tools
+          </Link>
+        </DropdownMenu.Item>
+        <DropdownMenu.Item asChild onSelect={() => setOpen(false)}>
+          <Link href="/gdpr" color={color}>
+            GDPR
+          </Link>
+        </DropdownMenu.Item>
+        <DropdownMenu.Item asChild onSelect={() => setOpen(false)}>
+          <Link href="/issues" color={color}>
+            App Issues
+          </Link>
+        </DropdownMenu.Item>
       </DropdownMenu.Content>
     </DropdownMenu.Root>
   );
