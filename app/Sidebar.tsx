@@ -160,6 +160,9 @@ const ComplianceNav = ({ color }: { color: RadixColor }) => (
     <NavItem href="/api-keys" color={color}>
       API Keys
     </NavItem>
+    <NavItem href="/issues" color={color}>
+      App Issues
+    </NavItem>
     <Separator size="4" />
     <Flex align="center" justify="between" gap="2">
       <NavItem href="/users" color={color} style={{ flexGrow: '2' }}>

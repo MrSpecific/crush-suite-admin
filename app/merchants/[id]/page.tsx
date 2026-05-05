@@ -136,6 +136,34 @@ export default async function Page({
 
   if (!id || !data) return <NotFound message="Merchant Not Found" />;
 
+  const [webhookLogs, appIssues] = await Promise.all([
+    prisma.orderWebhookLog.findMany({
+      where: { shop: data.shop },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+      select: {
+        id: true,
+        createdAt: true,
+        platformOrderId: true,
+        topic: true,
+        status: true,
+        errors: true,
+        orderId: true,
+      },
+    }),
+    prisma.appIssue.findMany({
+      where: { merchantId, resolved: false },
+      orderBy: { createdAt: 'desc' },
+      take: 10,
+      select: {
+        id: true,
+        createdAt: true,
+        issueType: true,
+        resolved: true,
+      },
+    }),
+  ]);
+
   const {
     shop,
     compliancePartner,
@@ -221,6 +249,10 @@ export default async function Page({
       <MerchantProducts products={products} headers={productHeaders} count={productCount} />
 
       <MerchantEvents events={events} merchantId={id} />
+
+      <MerchantAppIssues issues={appIssues} merchantId={id} />
+
+      <MerchantWebhookLogs logs={webhookLogs} />
     </PageLayout>
   );
 }
@@ -529,6 +561,117 @@ const MerchantOrders = ({
         Actions={OrderTableActions}
       />
       {count > ordersTake && <Link href={`/merchants/${merchantId}/orders`}>View More</Link>}
+    </Box>
+  );
+};
+
+const MerchantAppIssues = ({
+  issues,
+  merchantId,
+}: {
+  issues: { id: string; createdAt: Date; issueType: string; resolved: boolean }[];
+  merchantId: string;
+}) => {
+  if (issues.length === 0) return null;
+
+  const issueTypeColors: Record<string, string> = {
+    PRODUCTS: 'blue',
+    CUSTOMERS: 'purple',
+    ORDERS: 'orange',
+    COMPLIANCE_PRODUCTS: 'red',
+  };
+  const issueTypeLabels: Record<string, string> = {
+    PRODUCTS: 'Products',
+    CUSTOMERS: 'Customers',
+    ORDERS: 'Orders',
+    COMPLIANCE_PRODUCTS: 'Compliance Products',
+  };
+
+  return (
+    <Box my="4">
+      <Flex justify="between" align="center" mb="2">
+        <Heading>Open Issues ({issues.length})</Heading>
+        <ButtonLink href="/issues?resolved=no" variant="soft" color="gray" size="1">
+          View All Issues
+        </ButtonLink>
+      </Flex>
+      <DataTable
+        headers={[
+          {
+            id: 'issueType',
+            title: 'Type',
+            formatter: (v: string) => (
+              <Badge color={(issueTypeColors[v] ?? 'gray') as any} variant="soft">
+                {issueTypeLabels[v] ?? v}
+              </Badge>
+            ),
+          },
+          {
+            id: 'resolved',
+            title: 'Status',
+            formatter: (v: boolean) => (
+              <Badge color={v ? 'green' : 'red'} variant="soft">{v ? 'Resolved' : 'Open'}</Badge>
+            ),
+          },
+          { id: 'createdAt', title: 'Created', formatter: dateTimeFormatter },
+        ]}
+        data={issues}
+      />
+    </Box>
+  );
+};
+
+const MerchantWebhookLogs = ({
+  logs,
+}: {
+  logs: {
+    id: number;
+    createdAt: Date;
+    platformOrderId: string;
+    topic: string;
+    status: string;
+    errors: string[];
+    orderId: number | null;
+  }[];
+}) => {
+  return (
+    <Box my="4">
+      <Heading mb="2">Recent Webhook Logs</Heading>
+      {logs.length > 0 ? (
+        <DataTable
+          headers={[
+            { id: 'platformOrderId', title: 'Platform Order ID' },
+            { id: 'topic', title: 'Topic' },
+            {
+              id: 'status',
+              title: 'Status',
+              formatter: (v: string) => (
+                <Badge
+                  color={v === 'RECEIVED' ? 'blue' : v === 'PROCESSED' ? 'green' : 'red'}
+                  variant="soft"
+                  size="1"
+                >
+                  {v}
+                </Badge>
+              ),
+            },
+            {
+              id: 'errors',
+              title: 'Errors',
+              formatter: (v: string[]) =>
+                v.length > 0 ? (
+                  <Text color="red" size="1">{v[0]}{v.length > 1 ? ` (+${v.length - 1})` : ''}</Text>
+                ) : (
+                  '—'
+                ),
+            },
+            { id: 'createdAt', title: 'Received', formatter: dateTimeFormatter },
+          ]}
+          data={logs}
+        />
+      ) : (
+        <Text color="gray" size="2">No webhook logs for this merchant.</Text>
+      )}
     </Box>
   );
 };

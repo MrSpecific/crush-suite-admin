@@ -1,4 +1,4 @@
-import { OrderStatus, ProductCategory } from '@prisma/client';
+import { OrderStatus, ProductCategory, AppIssueType } from '@prisma/client';
 import type { RadixColor } from '@/types/radix-ui';
 import { DOMElement } from 'react';
 import type { ClubStatus, ClubType, Status as ClubsMerchantStatus, MerchantEmailType } from '../generated/prisma/clubs';
@@ -70,6 +70,13 @@ export const clubStatusMetaData: Record<ClubStatus, EnumMetaData> = {
     color: 'orange',
     description: 'No longer active',
   },
+};
+
+export const appIssueTypeMetaData: Record<AppIssueType, EnumMetaData> = {
+  PRODUCTS: { label: 'Products', color: 'blue' },
+  CUSTOMERS: { label: 'Customers', color: 'purple' },
+  ORDERS: { label: 'Orders', color: 'orange' },
+  COMPLIANCE_PRODUCTS: { label: 'Compliance Products', color: 'red' },
 };
 
 export const merchantEmailTypeMetaData: Record<MerchantEmailType, EnumMetaData> = {
