@@ -6,3 +6,514 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
+model Session {
+  id                  String    @id
+  shop                String
+  state               String
+  isOnline            Boolean   @default(false)
+  scope               String?
+  expires             DateTime?
+  accessToken         String
+  userId              BigInt?
+  firstName           String?
+  lastName            String?
+  email               String?
+  accountOwner        Boolean   @default(false)
+  locale              String?
+  collaborator        Boolean?  @default(false)
+  emailVerified       Boolean?  @default(false)
+  refreshToken        String?
+  refreshTokenExpires DateTime?
+}
+
+model Merchant {
+  id                     String                @id @default(cuid())
+  createdAt              DateTime              @default(now())
+  updatedAt              DateTime              @updatedAt
+  uninstalledAt          DateTime?
+  syncedAt               DateTime?
+  platform               String                @default("shopify")
+  shop                   String                @unique
+  accessToken            String?
+  status                 Status
+  billingPlanId          String?
+  subscriptionDiscountId String?
+  platformBillingId      String?
+  platformBillingStatus  String?
+  onboardedSteps         String[]              @default([])
+  onboardedAt            DateTime?
+  // below are generally analytics data, don't rely on them for business logic
+  platformEmail          String?
+  platformPlanName       String?
+  platformShopName       String? // without the .myshopify.com
+  platformTimezone       String?
+  platformZipCode        String?
+  platformStateCode      String?
+  platformPhone          String?
+  platformCity           String?
+  billingPlan            BillingPlan?          @relation(fields: [billingPlanId], references: [id])
+  subscriptionDiscount   SubscriptionDiscount? @relation(fields: [subscriptionDiscountId], references: [id])
+  venues                 Venue[]
+  reservations           Reservation[]
+}
+
+enum Status {
+  INSTALLED
+  READY
+  REMOVED
+  ERROR
+  MODULE_APP_INSTALLED
+}
+
+model BillingPlan {
+  id               String      @id @default(cuid())
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+  platform         String      @default("shopify")
+  name             String
+  description      String?
+  trialDays        Int         @default(0)
+  notes            String?
+  type             BillingType
+  price            Float       @default(0) // base price
+  perUsePrice      Float       @default(0) // eg revenue sharing
+  perUseThreshold  Float       @default(0) // eg revenue sharing when threshod has been met
+  perUseCap        Float       @default(0) // eg revenue sharing capped amount
+  perUseUnits      PerUseUnits @default(percent)
+  perUseTerms      String      @default("X % per month over Y USD. Capped at Z USD")
+  perUseType       PerUseType  @default(transaction)
+  accessibleStores String[]    @default([]) // if shopname with myshopify is present, only those shops will be eligible for this plan
+  merchants        Merchant[]
+}
+
+enum BillingType {
+  monthly
+  percentage
+  oneTime
+}
+
+enum PerUseType {
+  transaction
+}
+
+enum PerUseUnits {
+  percent
+  fixed
+}
+
+model SubscriptionDiscount {
+  id                String       @id @default(cuid())
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+  platform          String       @default("shopify")
+  description       String
+  value             String
+  discountFixed     Float
+  discountPercent   Float
+  discountType      DiscountType @default(recurring)
+  uses              Int          @default(1)
+  durationIntervals Int
+  applicablePlanIds String[]     @default([]) // optional and we don't actually utilize a fk on the plan table
+  merchants         Merchant[]
+}
+
+enum DiscountType {
+  oneTime
+  recurring
+}
+
+// Biz logic related tables can be added below
+
+// =====================
+// Venue
+// =====================
+model Venue {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  merchantId String
+  merchant   Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  name     String
+  timezone String
+
+  // Shopify Location
+  platformLocationId   String
+  platformLocationName String
+
+  // Market context
+  currency String // e.g. "USD"
+  market   String // e.g. "US"
+
+  status VenueStatus @default(ACTIVE)
+
+  // Cancellation policy (default for all experiences at this venue)
+  cancellationRules       Json? // CancellationRule[] validated at app layer via Zod
+  cancellationDescription String? // Human-readable policy text for display
+
+  experiences   Experience[]
+  slots         Slot[]
+  reservations  Reservation[]
+  blackoutDates BlackoutDate[]
+  blackoutRules BlackoutRule[]
+
+  @@index([merchantId])
+}
+
+enum VenueStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+// =====================
+// Experience (Shopify Product)
+// =====================
+model Experience {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  venueId String
+  venue   Venue  @relation(fields: [venueId], references: [id], onDelete: Cascade)
+
+  name        String
+  description String?
+
+  // Language the experience is conducted in (e.g., "en", "es", "fr")
+  locale String @default("en")
+
+  // Shopify Product (created when first variant is added)
+  platformProductId String?
+
+  // Duration of the experience in minutes
+  durationMinutes Int @default(60)
+
+  // Default capacity for new slots
+  defaultCapacity Int @default(10)
+
+  // Soft-hold configuration
+  holdDurationMinutes Int @default(10)
+
+  status ExperienceStatus @default(ACTIVE)
+
+  // Cancellation policy (overrides venue policy when set)
+  cancellationRules       Json? // CancellationRule[] validated at app layer via Zod
+  cancellationDescription String? // Human-readable policy text for display
+
+  variants        ExperienceVariant[]
+  slots           Slot[]
+  reservations    Reservation[]
+  recurrenceRules RecurrenceRule[]
+  blackoutDates   BlackoutDate[]
+  blackoutRules   BlackoutRule[]
+
+  @@index([venueId])
+}
+
+enum ExperienceStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+// =====================
+// Experience Variant
+// =====================
+model ExperienceVariant {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  experienceId String
+  experience   Experience @relation(fields: [experienceId], references: [id], onDelete: Cascade)
+
+  name String
+
+  // Shopify Variant (created when synced to Shopify)
+  platformVariantId String?
+
+  price Float
+
+  // Optional per-variant limit per slot (e.g., only 5 VIP per time slot)
+  maxPerSlot Int?
+
+  status ExperienceVariantStatus @default(ACTIVE)
+
+  reservations Reservation[]
+
+  @@unique([experienceId, name])
+}
+
+enum ExperienceVariantStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+// =====================
+// Slot (Concrete availability)
+// =====================
+model Slot {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  venueId String
+  venue   Venue  @relation(fields: [venueId], references: [id], onDelete: Cascade)
+
+  experienceId String
+  experience   Experience @relation(fields: [experienceId], references: [id], onDelete: Cascade)
+
+  // Link to recurrence rule (null for one-off slots)
+  recurrenceRuleId String?
+  recurrenceRule   RecurrenceRule? @relation(fields: [recurrenceRuleId], references: [id], onDelete: SetNull)
+
+  // If true, this slot was edited individually and is "detached" from rule updates
+  isDetached Boolean @default(false)
+
+  startAt  DateTime // UTC
+  endAt    DateTime // UTC
+  timezone String // Venue timezone at time of creation (e.g., "America/Chicago")
+
+  capacityTotal     Int
+  capacityReserved  Int @default(0)
+  capacityCheckedIn Int @default(0)
+
+  status SlotStatus @default(AVAILABLE)
+
+  reservations Reservation[]
+  holds        SlotHold[]
+
+  @@unique([experienceId, startAt])
+  @@index([venueId, startAt])
+  @@index([recurrenceRuleId])
+}
+
+enum SlotStatus {
+  AVAILABLE
+  SOLD_OUT
+  BLOCKED
+}
+
+enum SlotHoldStatus {
+  ACTIVE
+  EXPIRED
+  CONVERTED
+}
+
+// =====================
+// Soft Holds (pre-checkout)
+// =====================
+model SlotHold {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  slotId String
+  slot   Slot   @relation(fields: [slotId], references: [id], onDelete: Cascade)
+
+  quantity  Int
+  expiresAt DateTime
+  status    SlotHoldStatus @default(ACTIVE)
+
+  // Optional correlation to cart/session
+  cartToken     String?
+  customerEmail String?
+
+  @@index([slotId])
+  @@index([expiresAt])
+  @@index([status, expiresAt])
+}
+
+// =====================
+// Reservation
+// =====================
+model Reservation {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  merchantId String
+  merchant   Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  venueId String
+  venue   Venue  @relation(fields: [venueId], references: [id], onDelete: Cascade)
+
+  slotId String
+  slot   Slot   @relation(fields: [slotId], references: [id], onDelete: Restrict)
+
+  experienceId String
+  experience   Experience @relation(fields: [experienceId], references: [id], onDelete: Restrict)
+
+  variantId String
+  variant   ExperienceVariant @relation(fields: [variantId], references: [id], onDelete: Restrict)
+
+  // Soft-hold correlation — links reservation back to the SlotHold that was converted
+  holdId String?
+
+  // Shopify order linkage
+  platformOrderId    String
+  platformLineItemId String
+  orderName          String?
+
+  partySize Int
+
+  customerEmail     String?
+  customerFirstName String?
+  customerLastName  String?
+  customerPhone     String?
+
+  status ReservationStatus @default(BOOKED)
+
+  // Cancellation metadata (populated when status → CANCELLED)
+  cancelledAt        DateTime?
+  cancelledBy        String? // "merchant" | "customer" | "system"
+  cancellationReason String?
+  refundOutcome      String? // "FULL_REFUND" | "PARTIAL_REFUND" | "NO_REFUND"
+  refundPercent      Int?
+  refundAmount       String? // Decimal string from Shopify (e.g., "25.00")
+  platformRefundId   String? // Shopify Refund GID
+
+  tickets ReservationTicket[]
+
+  @@unique([merchantId, platformOrderId, platformLineItemId])
+  @@index([venueId, createdAt])
+  @@index([holdId])
+}
+
+enum ReservationStatus {
+  BOOKED
+  CANCELLED
+  IN_PROGRESS
+  COMPLETED
+}
+
+// =====================
+// Ticket / Seat
+// =====================
+model ReservationTicket {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  reservationId String
+  reservation   Reservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+
+  status      TicketStatus @default(RESERVED)
+  checkedInAt DateTime?
+
+  @@index([reservationId])
+}
+
+enum TicketStatus {
+  RESERVED
+  CHECKED_IN
+  CANCELLED
+}
+
+// =====================
+// Recurrence Rule (schedule template)
+// =====================
+model RecurrenceRule {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  experienceId String
+  experience   Experience @relation(fields: [experienceId], references: [id], onDelete: Cascade)
+
+  // iCalendar RRULE string (e.g., "FREQ=WEEKLY;BYDAY=MO,WE,FR")
+  rrule String
+
+  // Template for generated slots (times in HH:mm format, local to venue timezone)
+  startTime     String // e.g., "14:00"
+  endTime       String // e.g., "15:30"
+  capacityTotal Int
+
+  // Dates to skip when generating (individual exceptions)
+  exceptionDates DateTime[] @default([])
+
+  // How far slots have been generated
+  generatedUntil DateTime
+
+  status RecurrenceRuleStatus @default(ACTIVE)
+
+  slots Slot[]
+
+  @@index([experienceId])
+  @@index([status])
+}
+
+enum RecurrenceRuleStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+// =====================
+// Blackout Date (venue or experience level)
+// =====================
+model BlackoutDate {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  // Scope: venue-level OR experience-level (one must be set)
+  venueId      String?
+  venue        Venue?      @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  experienceId String?
+  experience   Experience? @relation(fields: [experienceId], references: [id], onDelete: Cascade)
+
+  // Link to blackout rule (null for one-off blackouts)
+  blackoutRuleId String?
+  blackoutRule   BlackoutRule? @relation(fields: [blackoutRuleId], references: [id], onDelete: Cascade)
+
+  // The blocked date (date only, stored as midnight UTC)
+  date DateTime @db.Date
+
+  // Optional label (e.g., "Christmas", "Private Event")
+  reason String?
+
+  @@unique([venueId, date])
+  @@unique([experienceId, date])
+  @@index([venueId])
+  @@index([experienceId])
+  @@index([blackoutRuleId])
+}
+
+// =====================
+// Blackout Rule (recurring blackout template)
+// =====================
+model BlackoutRule {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Scope: venue-level OR experience-level (one must be set)
+  venueId      String?
+  venue        Venue?      @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  experienceId String?
+  experience   Experience? @relation(fields: [experienceId], references: [id], onDelete: Cascade)
+
+  // iCalendar RRULE string (e.g., "FREQ=WEEKLY;BYDAY=SU")
+  rrule String
+
+  // Optional label (e.g., "Closed Sundays")
+  reason String?
+
+  // Dates to skip when generating (individual exceptions)
+  exceptionDates DateTime[] @default([])
+
+  // How far blackout dates have been generated
+  generatedUntil DateTime
+
+  status BlackoutRuleStatus @default(ACTIVE)
+
+  blackoutDates BlackoutDate[]
+
+  @@index([venueId])
+  @@index([experienceId])
+  @@index([status])
+}
+
+enum BlackoutRuleStatus {
+  ACTIVE
+  ARCHIVED
+}
