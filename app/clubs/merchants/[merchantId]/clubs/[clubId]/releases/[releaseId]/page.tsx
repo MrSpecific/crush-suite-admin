@@ -111,6 +111,24 @@ export default async function Page({
     return <NotFound message="Release not found" />;
   }
 
+  const releaseOrders = await prismaClubs.releaseOrder.findMany({
+    where: { releaseId },
+    orderBy: { createdAt: 'desc' },
+    take: 100,
+    select: {
+      id: true,
+      platformCustomerId: true,
+      platformOrderId: true,
+      orderCreatedAt: true,
+      skippedAt: true,
+      deliveryMethod: true,
+      subtotal: true,
+      discountAmount: true,
+      deliveryPrice: true,
+      createdAt: true,
+    },
+  });
+
   const productHeaders = [
     { id: 'platformProductId', title: 'Product ID', as: 'code' as const },
     { id: 'platformVariantId', title: 'Variant ID', as: 'code' as const },

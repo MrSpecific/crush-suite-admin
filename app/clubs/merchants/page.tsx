@@ -4,9 +4,11 @@ import { DataTable } from '@/app/components/DataTable';
 import { Pagination } from '@/app/components/Pagination';
 import { queryPagination } from '@/lib/queryPagination';
 import { dateFormatter } from '@/lib/formatters';
+import { DataFilter } from '@/app/components/DataFilter';
 import { Badge } from '@radix-ui/themes';
 import type { RadixColor } from '@/types/radix-ui';
 import { ButtonLink } from '@/app/components/ButtonLink';
+import { Prisma } from '@/generated/prisma/clubs';
 
 const merchantStatusOptions: { value: string; label: string; color: RadixColor }[] = [
   { value: 'READY', label: 'Ready', color: 'green' },
@@ -20,10 +22,13 @@ const Actions = ({ id }: { id: number }) => (
 );
 
 export default async function Page({ searchParams }: { searchParams: PageSearchParams }) {
-  const { page } = searchParams;
-  const count = await prismaClubs.merchant.count();
+  const { page, search } = searchParams;
+  const searchString = search?.toString();
+  const where = getMerchantWhere(searchString);
+  const count = await prismaClubs.merchant.count({ where });
   const merchants = await prismaClubs.merchant.findMany({
     ...queryPagination({ page, count }),
+    where,
     orderBy: { createdAt: 'desc' },
     select: {
       id: true,
@@ -56,8 +61,21 @@ export default async function Page({ searchParams }: { searchParams: PageSearchP
 
   return (
     <PageLayout heading="Merchants">
+      <DataFilter />
       <DataTable headers={headers} data={merchants} Actions={Actions} />
       <Pagination count={count} />
     </PageLayout>
   );
 }
+
+const getMerchantWhere = (search?: string): Prisma.MerchantWhereInput | undefined => {
+  if (!search) return undefined;
+
+  return {
+    OR: [
+      { shop: { contains: search, mode: Prisma.QueryMode.insensitive } },
+      { platformShopName: { contains: search, mode: Prisma.QueryMode.insensitive } },
+      { platformEmail: { contains: search, mode: Prisma.QueryMode.insensitive } },
+    ],
+  };
+};
