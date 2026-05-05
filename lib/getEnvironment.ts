@@ -29,6 +29,7 @@ const envs: {
 };
 
 type Environment = 'local' | 'development' | 'staging' | 'production' | 'unknown';
+type App = 'compliance' | 'clubs' | 'seats';
 
 export const getEnvironment = () => {
   const name: Environment = (process.env.NEXT_PUBLIC_ENV as Environment) || 'unknown';

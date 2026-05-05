@@ -123,6 +123,7 @@ const ComplianceNav = () => (
 
 const ClubsNav = () => (
   <>
+    <NavItem href="/clubs/all">All Clubs</NavItem>
     <NavItem href="/clubs/merchants">Merchants</NavItem>
   </>
 );
