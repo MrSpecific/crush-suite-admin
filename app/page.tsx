@@ -127,9 +127,14 @@ export default async function Home() {
             </Grid>
 
             <Separator size="4" mb="3" />
-            <Heading size="2" color="gray" mb="2">
-              Recently Added Merchants
-            </Heading>
+            <Flex align="center" justify="between" mb="2">
+              <Heading size="2" color="gray">
+                Recently Added Merchants
+              </Heading>
+              <ButtonLink href="/merchants" variant="ghost" size="1" color="gray">
+                View more →
+              </ButtonLink>
+            </Flex>
             <Flex direction="column" gap="2">
               {recentMerchants.map((m) => (
                 <RecentItem
