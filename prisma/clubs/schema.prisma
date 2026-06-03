@@ -8,28 +8,27 @@ datasource db {
 }
 
 model Merchant {
-  id                     Int                    @id @default(autoincrement())
-  createdAt              DateTime               @default(now())
-  updatedAt              DateTime               @updatedAt
-  shop                   String                 @unique
-  status                 Status
-  platformEmail          String?
-  platformShopName       String? // without the .myshopify.com
-  platformTimezone       String?
-  platformZipCode        String?
-  platformStateCode      String?
-  platformPhone          String?
-  subscriptionDiscountId Int?
-  subscriptionDiscount   SubscriptionDiscount?  @relation(fields: [subscriptionDiscountId], references: [id])
-  ApiAccess              ApiAccess[]
-  GDPR                   GDPR[]
-  AppBillingPlan         AppBillingPlan?        @relation(fields: [appBillingPlanId], references: [id])
-  appBillingPlanId       Int?
-  Club                   Club[]
-  MerchantEmailSettings  MerchantEmailSettings?
-  GDPRRequest            GDPRRequest[]
-  bundleDiscountId       String? // Shopify automatic discount GID for bundle Function
-  bundleCartTransformId  String? // Shopify CartTransform ID for bundle Function
+  id                    Int                    @id @default(autoincrement())
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  shop                  String                 @unique
+  status                Status
+  platformEmail         String?
+  platformShopId        String? // Shopify shop ID (degidified, e.g., "12345"); needed for Partner API activeSubscription
+  platformShopName      String? // without the .myshopify.com
+  platformTimezone      String?
+  platformZipCode       String?
+  platformStateCode     String?
+  platformPhone         String?
+  ApiAccess             ApiAccess[]
+  GDPR                  GDPR[]
+  AppBillingPlan        AppBillingPlan?        @relation(fields: [appBillingPlanId], references: [id])
+  appBillingPlanId      Int?
+  Club                  Club[]
+  MerchantEmailSettings MerchantEmailSettings?
+  GDPRRequest           GDPRRequest[]
+  bundleDiscountId      String? // Shopify automatic discount GID for bundle Function
+  bundleCartTransformId String? // Shopify CartTransform ID for bundle Function
 
   @@index([shop])
 }
@@ -41,22 +40,6 @@ enum PerUseType {
 enum PerUseUnits {
   percent
   fixed
-}
-
-model SubscriptionDiscount {
-  id                Int          @id @default(autoincrement())
-  createdAt         DateTime     @default(now())
-  updatedAt         DateTime     @default(now())
-  platform          String       @default("shopify")
-  description       String
-  value             String
-  discountFixed     Float
-  discountPercent   Float
-  discountType      DiscountType @default(recurring)
-  uses              Int          @default(1)
-  durationIntervals Int
-  applicablePlanIds Int[]        @default([]) // optional and we don't actually utilize a fk on the plan table
-  merchants         Merchant[]
 }
 
 model AdminUser {
@@ -140,25 +123,25 @@ model AppSession {
 }
 
 model AppBillingPlan {
-  id               Int         @id @default(autoincrement())
-  createdAt        DateTime    @default(now())
-  updatedAt        DateTime    @default(now())
-  platform         String      @default("shopify")
-  name             String
-  description      String?
-  trialDays        Int         @default(0)
-  notes            String?
-  type             BillingType
-  currencyCode     String      @default("USD")
-  price            Float       @default(0) // base price
-  perUsePrice      Float       @default(0) // eg revenue sharing
-  perUseThreshold  Float       @default(0) // eg revenue sharing when threshod has been met
-  perUseCap        Int         @default(0) // eg revenue sharing capped amount
-  perUseUnits      PerUseUnits @default(percent)
-  perUseTerms      String      @default("X % per month over Y USD. Capped at Z USD")
-  perUseType       PerUseType  @default(transaction)
-  accessibleStores String[]    @default([]) // if shopname with myshopify is present, only those shops will be eligible for this plan
-  merchants        Merchant[]
+  id              Int         @id @default(autoincrement())
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @default(now())
+  platform        String      @default("shopify")
+  handle          String?     @unique // Shopify App Pricing plan handle; matches ?plan_handle= from welcome redirect
+  name            String
+  description     String?
+  trialDays       Int         @default(0)
+  notes           String?
+  type            BillingType
+  currencyCode    String      @default("USD")
+  price           Float       @default(0) // base price
+  perUsePrice     Float       @default(0) // eg revenue sharing
+  perUseThreshold Float       @default(0) // eg revenue sharing when threshod has been met
+  perUseCap       Int         @default(0) // eg revenue sharing capped amount
+  perUseUnits     PerUseUnits @default(percent)
+  perUseTerms     String      @default("X % per month over Y USD. Capped at Z USD")
+  perUseType      PerUseType  @default(transaction)
+  merchants       Merchant[]
 }
 
 model Club {
@@ -230,6 +213,7 @@ model Release {
   platformHandle                    String
   description                       String
   status                            ReleaseStatus                 @default(published)
+  archivedAt                        DateTime?
   allowCustomization                Boolean                       @default(true)
   publishDate                       DateTime // when customers can start customizing
   customizationDeadline             DateTime // customers can no longer customize after this date
@@ -273,6 +257,7 @@ model Release {
 enum ReleaseStatus {
   draft
   published
+  archived
 }
 
 model ReleaseProduct {
@@ -601,6 +586,7 @@ enum MembershipEventType {
 enum BundleMode {
   FIXED // merchant pre-selects products
   PICK_AND_MIX // customer chooses from catalog
+  MIGRATED // catch-all per-club marker for migrated subscribers whose configs don't match any merchant-curated FIXED/PICK_AND_MIX type. Per-customer data lives entirely on BundleSubscription + BundleSelectionSnapshot. See documentation/bundle-subscriptions/migration.md.
 }
 
 enum BundleTypeStatus {
@@ -998,11 +984,6 @@ enum BillingType {
   oneTime
 }
 
-enum DiscountType {
-  oneTime
-  recurring
-}
-
 model MerchantEmailLog {
   id        String            @id @default(cuid())
   createdAt DateTime          @default(now())
@@ -1139,6 +1120,38 @@ model ClubMigrationRecord {
   gatewayCustomerToken    String?
   gatewayPaymentToken     String?
 
+  // ─── Bundle migration fields (bundle-subscription clubs only) ──────
+  // See documentation/bundle-subscriptions/migration.md.
+  /// Customer's per-line selections from the CSV: [{variantId, quantity, price}].
+  /// Required (or `shopifyContractId`) for bundle-club rows.
+  bundleSelections  Json?
+  /// Customer's billing cadence. Validated against Club.bundleFrequencies at upload.
+  bundleFrequency   BundleFrequency?
+  /// Optional source contract GID. Must be owned by our app — cross-app
+  /// reads are blocked by Shopify's read_own_subscription_contracts scope.
+  /// When provided, the worker hydrates lines/discounts/delivery from the
+  /// contract instead of reading the CSV columns.
+  shopifyContractId String?
+  /// Honors the customer's existing next-bill date if provided. Falls back
+  /// to today + grace period.
+  nextBillingDate   DateTime?
+
+  // Product discount (used for the MIGRATED-fallback path; ignored when
+  // matched to a real BundleType — merchant tier wins there)
+  productDiscountName  String?
+  productDiscountType  DiscountValueType? // PERCENT | FIXED
+  productDiscountValue Float?
+
+  // Locked-in shipping (SHIPPING method only)
+  shippingRateCode  String?
+  shippingBasePrice Float? // pre-discount carrier rate
+  shippingPrice     Float? // post-discount price billed (derived from base − discount when discount columns present)
+
+  // Shipping discount (FREE normalized to PERCENT 100 at validation time)
+  shippingDiscountName  String?
+  shippingDiscountType  DiscountValueType?
+  shippingDiscountValue Float?
+
   // Resolution state (populated by worker phases)
   status                  MigrationRecordStatus @default(PENDING)
   platformCustomerId      String?
@@ -1147,6 +1160,10 @@ model ClubMigrationRecord {
   membershipId            String?
   platformPaymentMethodId String?
   platformContractId      String?
+  /// Set by Phase 5 to the BundleType GID that this row was matched to
+  /// (or the per-club catch-all MIGRATED type's GID). Drives the
+  /// dashboard's "matched vs migrated as-is" categorization.
+  bundleTypeIdResolved    String?
 
   // Status flags
   paymentMethodExists   Boolean   @default(false)
