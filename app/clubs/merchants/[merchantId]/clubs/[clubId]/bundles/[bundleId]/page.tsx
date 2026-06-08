@@ -2,9 +2,12 @@ import { prismaClubs } from '@/lib/prisma-clubs';
 import { PageLayout } from '@/app/components/PageLayout';
 import { QuickDataList } from '@/app/components/QuickDataList';
 import { DataTable } from '@/app/components/DataTable';
+import { Pagination } from '@/app/components/Pagination';
 import { NotFound } from '@/app/components/NotFound';
 import { Badge, Box, Card, Grid, Heading, Text } from '@radix-ui/themes';
-import { dateFormatter } from '@/lib/formatters';
+import { dateFormatter, dateTimeFormatter } from '@/lib/formatters';
+import { queryPagination } from '@/lib/queryPagination';
+import { ButtonLink } from '@/app/components/ButtonLink';
 import type { RadixColor } from '@/types/radix-ui';
 
 const productKindColor: Record<string, RadixColor> = {
@@ -12,13 +15,22 @@ const productKindColor: Record<string, RadixColor> = {
   optional: 'gray',
 };
 
+const subscriptionStatusColor: Record<string, RadixColor> = {
+  ACTIVE: 'green',
+  PAUSED: 'yellow',
+  CANCELLED: 'gray',
+};
+
 export default async function Page({
   params,
+  searchParams,
 }: {
   params: { merchantId: string; clubId: string; bundleId: string };
+  searchParams: PageSearchParams;
 }) {
   const merchantId = parseInt(params.merchantId);
   const { clubId, bundleId } = params;
+  const { page } = searchParams;
 
   if (isNaN(merchantId)) return <NotFound message="Bundle type not found" />;
 
@@ -83,6 +95,37 @@ export default async function Page({
   if (!bundle || bundle.clubId !== clubId || bundle.club.merchantId !== merchantId) {
     return <NotFound message="Bundle type not found" />;
   }
+
+  const subscriptionCount = await prismaClubs.bundleSubscription.count({
+    where: { bundleTypeId: bundleId },
+  });
+
+  const subscriptions = await prismaClubs.bundleSubscription.findMany({
+    ...queryPagination({ page, count: subscriptionCount }),
+    where: { bundleTypeId: bundleId },
+    orderBy: { createdAt: 'desc' },
+    select: {
+      id: true,
+      status: true,
+      frequency: true,
+      nextBillingDate: true,
+      createdAt: true,
+      membership: {
+        select: {
+          memberNumber: true,
+          customer: { select: { defaultEmail: true, firstName: true, lastName: true } },
+        },
+      },
+    },
+  });
+
+  const subscriptionRows = subscriptions.map((s) => ({
+    ...s,
+    member:
+      [s.membership.customer.firstName, s.membership.customer.lastName].filter(Boolean).join(' ') ||
+      s.membership.customer.defaultEmail,
+    memberNumber: s.membership.memberNumber,
+  }));
 
   const productHeaders = [
     { id: 'platformProductId', title: 'Product ID', as: 'code' as const },
@@ -187,11 +230,51 @@ export default async function Page({
       </Box>
 
       {bundle.discounts.length > 0 && (
-        <Box>
+        <Box mb="6">
           <Heading size="4" mb="3">Discounts ({bundle.discounts.length})</Heading>
           <DataTable headers={discountHeaders} data={bundle.discounts} />
         </Box>
       )}
+
+      <Box>
+        <Heading size="4" mb="3">Subscribers ({subscriptionCount})</Heading>
+        {subscriptionRows.length > 0 ? (
+          <>
+            <DataTable
+              headers={[
+                { id: 'member', title: 'Member' },
+                { id: 'memberNumber', title: 'Member #', formatter: (v: string | null) => v ?? '—' },
+                {
+                  id: 'status',
+                  title: 'Status',
+                  formatter: (v: string) => (
+                    <Badge color={subscriptionStatusColor[v] ?? 'gray'} variant="soft">{v}</Badge>
+                  ),
+                },
+                { id: 'frequency', title: 'Frequency' },
+                {
+                  id: 'nextBillingDate',
+                  title: 'Next Billing',
+                  formatter: (v: Date | null) => (v ? dateTimeFormatter(v) : '—'),
+                },
+                { id: 'createdAt', title: 'Subscribed', formatter: dateFormatter },
+                { type: 'actions' as const, title: 'Actions' },
+              ]}
+              data={subscriptionRows}
+              Actions={({ id }: { id: string }) => (
+                <ButtonLink
+                  href={`/clubs/merchants/${merchantId}/clubs/${clubId}/subscriptions/${id}`}
+                >
+                  View
+                </ButtonLink>
+              )}
+            />
+            <Pagination count={subscriptionCount} />
+          </>
+        ) : (
+          <Text color="gray" size="2">No subscribers yet.</Text>
+        )}
+      </Box>
     </PageLayout>
   );
 }

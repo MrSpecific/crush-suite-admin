@@ -1,5 +1,6 @@
 import { Flex, ScrollArea, Table } from '@radix-ui/themes';
 import { DataDialog } from './DataDialog';
+import { Link } from './Link';
 import { ReactNode } from 'react';
 
 export type ColumnType = 'text' | 'data' | 'actions' | 'child';
@@ -8,6 +9,7 @@ export type Header = {
   id?: string;
   title: string;
   formatter?: (value: any, row: any) => string | ReactNode;
+  href?: (value: any, row: any) => string | null | undefined;
   clipboard?: boolean;
   type?: ColumnType;
   as?: 'code';
@@ -71,13 +73,18 @@ export const DataTable = ({ headers, data, Actions }: DataTableProps) => {
                     ? rawValue ?? '—'
                     : String(rawValue ?? '');
 
+                const content =
+                  header.as === 'code' && !header.formatter ? (
+                    <code>{displayValue}</code>
+                  ) : (
+                    displayValue
+                  );
+
+                const href = header.href?.(rawValue, row);
+
                 return (
                   <Table.Cell key={key} minWidth="max-content" style={{ whiteSpace: 'nowrap' }}>
-                    {header.as === 'code' && !header.formatter ? (
-                      <code>{displayValue}</code>
-                    ) : (
-                      displayValue
-                    )}
+                    {href ? <Link href={href}>{content}</Link> : content}
                   </Table.Cell>
                 );
               })}

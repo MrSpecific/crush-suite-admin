@@ -31,7 +31,12 @@ export default async function Page({ searchParams }: { searchParams: PageSearchP
   });
 
   const headers = [
-    { id: 'name', title: 'Club Name' },
+    {
+      id: 'name',
+      title: 'Club Name',
+      href: (value: string, row: { id: string; merchantId: number }) =>
+        `/clubs/merchants/${row.merchantId}/clubs/${row.id}`,
+    },
     {
       id: 'merchant',
       title: 'Merchant',

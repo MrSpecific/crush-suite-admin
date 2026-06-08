@@ -96,6 +96,23 @@ export default async function Page({
     return acc;
   }, {});
 
+  const isBundleClub = club.clubType === 'bundle_subscription';
+
+  const subscriptionStatusGroups = isBundleClub
+    ? await prismaClubs.bundleSubscription.groupBy({
+        by: ['status'],
+        where: { bundleType: { clubId } },
+        _count: { _all: true },
+      })
+    : [];
+
+  const subscriptionCounts = subscriptionStatusGroups.reduce<Record<string, number>>((acc, g) => {
+    acc[g.status] = g._count._all;
+    return acc;
+  }, {});
+
+  const totalSubscriptions = subscriptionStatusGroups.reduce((sum, g) => sum + g._count._all, 0);
+
   const releaseBasePath = `/clubs/merchants/${merchantId}/clubs/${clubId}/releases`;
 
   const ReleaseActions = ({ id }: { id: string }) => (
@@ -230,7 +247,23 @@ export default async function Page({
         )}
       </Box>
 
-      {club.clubType === 'bundle_subscription' && (
+      {isBundleClub && (
+        <Card mb="4">
+          <Heading size="3" mb="3">
+            Bundle Subscriptions
+          </Heading>
+          <QuickDataList
+            data={[
+              { label: 'Total', value: totalSubscriptions.toString() },
+              { label: 'Active', value: (subscriptionCounts['ACTIVE'] ?? 0).toString() },
+              { label: 'Paused', value: (subscriptionCounts['PAUSED'] ?? 0).toString() },
+              { label: 'Cancelled', value: (subscriptionCounts['CANCELLED'] ?? 0).toString() },
+            ]}
+          />
+        </Card>
+      )}
+
+      {isBundleClub && (
         <Box>
           <Heading size="4" mb="3">
             Bundle Types ({club.BundleType.length})
