@@ -33,18 +33,6 @@ export default async function Page({ params }: { params: { merchantId: string } 
       AppBillingPlan: {
         select: { id: true, name: true, price: true, type: true },
       },
-      subscriptionDiscount: {
-        select: {
-          id: true,
-          description: true,
-          value: true,
-          discountFixed: true,
-          discountPercent: true,
-          discountType: true,
-          uses: true,
-          durationIntervals: true,
-        },
-      },
       Club: {
         orderBy: { createdAt: 'desc' },
         select: {
@@ -145,23 +133,6 @@ export default async function Page({ params }: { params: { merchantId: string } 
         </Flex>
         <DataTable headers={clubHeaders} data={merchant.Club} Actions={ClubActions} />
       </Box>
-
-      {merchant.subscriptionDiscount && (
-        <Card mb="6">
-          <Heading size="3" mb="3">Subscription Discount</Heading>
-          <QuickDataList
-            data={[
-              { label: 'Description', value: merchant.subscriptionDiscount.description },
-              { label: 'Value', value: merchant.subscriptionDiscount.value },
-              { label: 'Fixed Amount', value: `$${merchant.subscriptionDiscount.discountFixed.toFixed(2)}` },
-              { label: 'Percent', value: `${(merchant.subscriptionDiscount.discountPercent * 100).toFixed(1)}%` },
-              { label: 'Type', value: merchant.subscriptionDiscount.discountType },
-              { label: 'Uses', value: merchant.subscriptionDiscount.uses.toString() },
-              { label: 'Duration', value: `${merchant.subscriptionDiscount.durationIntervals} intervals` },
-            ]}
-          />
-        </Card>
-      )}
 
       <Box>
         <Heading size="4" mb="3">Recent Merchant Emails</Heading>

@@ -22,9 +22,10 @@ const OrderActions = ({ orderId }: { orderId: number | null }) =>
 export default async function Page({ searchParams }: { searchParams: PageSearchParams }) {
   const { page, status, search } = searchParams;
   const searchString = search?.toString();
+  const statusString = status?.toString();
 
   const where = {
-    ...(status ? { status } : {}),
+    ...(statusString ? { status: statusString } : {}),
     ...(searchString
       ? {
           OR: [

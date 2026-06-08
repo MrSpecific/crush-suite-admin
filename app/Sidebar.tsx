@@ -336,6 +336,11 @@ const AdminDropdown = ({ color }: { color: RadixColor }) => {
             App Issues
           </Link>
         </DropdownMenu.Item>
+        <DropdownMenu.Item asChild onSelect={() => setOpen(false)}>
+          <Link href="/enums" color={color}>
+            Enums &amp; Lists
+          </Link>
+        </DropdownMenu.Item>
       </DropdownMenu.Content>
     </DropdownMenu.Root>
   );
