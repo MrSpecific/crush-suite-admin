@@ -215,7 +215,11 @@ const EnumCard = ({
               const m = meta?.[value];
               return (
                 <Box key={value}>
-                  <Badge color={m?.color ?? 'gray'} variant="soft">
+                  <Badge
+                    color={m?.color ?? 'gray'}
+                    variant="soft"
+                    style={{ whiteSpace: 'normal', wordBreak: 'break-word' }}
+                  >
                     {m?.label ?? value}
                   </Badge>
                 </Box>
