@@ -2,10 +2,10 @@ import { prismaClubs } from '@/lib/prisma-clubs';
 import { PageLayout } from '@/app/components/PageLayout';
 import { QuickDataList } from '@/app/components/QuickDataList';
 import { DataTable } from '@/app/components/DataTable';
+import { DataDialog } from '@/app/components/DataDialog';
 import { NotFound } from '@/app/components/NotFound';
 import { Badge, Box, Card, Grid, Heading, Text } from '@radix-ui/themes';
-import { dateFormatter } from '@/lib/formatters';
-import { ButtonLink } from '@/app/components/ButtonLink';
+import { dateFormatter, dateTimeFormatter } from '@/lib/formatters';
 import type { RadixColor } from '@/types/radix-ui';
 
 const membershipStatusColor: Record<string, RadixColor> = {
@@ -15,9 +15,30 @@ const membershipStatusColor: Record<string, RadixColor> = {
   PENDING_MIGRATION: 'orange',
 };
 
-const MembershipActions = ({ clubId, merchantId }: { clubId: string; merchantId: number }) => (
-  <ButtonLink href={`/clubs/merchants/${merchantId}/clubs/${clubId}`}>View Club</ButtonLink>
-);
+const subscriptionStatusColor: Record<string, RadixColor> = {
+  ACTIVE: 'green',
+  PAUSED: 'yellow',
+  CANCELLED: 'gray',
+};
+
+const billingStatusColor: Record<string, RadixColor> = {
+  PENDING: 'gray',
+  SUCCESS: 'green',
+  FAILED: 'red',
+  CHALLENGED: 'purple',
+};
+
+const money = (value: number | null | undefined, currency = 'USD') =>
+  value != null
+    ? new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(value)
+    : '—';
+
+const titleCase = (value: string) =>
+  value
+    .toLowerCase()
+    .split('_')
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
 
 export default async function Page({ params }: { params: { id: string } }) {
   const customer = await prismaClubs.clubCustomer.findUnique({
@@ -46,8 +67,18 @@ export default async function Page({ params }: { params: { id: string } }) {
           club: {
             select: {
               name: true,
+              clubType: true,
               merchantId: true,
               merchant: { select: { platformShopName: true, shop: true } },
+            },
+          },
+          bundleSubscription: {
+            select: {
+              id: true,
+              status: true,
+              frequency: true,
+              nextBillingDate: true,
+              bundleType: { select: { name: true } },
             },
           },
         },
@@ -57,40 +88,254 @@ export default async function Page({ params }: { params: { id: string } }) {
 
   if (!customer) return <NotFound message="Member not found" />;
 
+  const [releaseOrders, billingRecords, membershipEvents, bundleEvents, emailLogs] = await Promise.all([
+    prismaClubs.releaseOrder.findMany({
+      where: { clubCustomerId: customer.id },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+      select: {
+        id: true,
+        skippedAt: true,
+        platformOrderId: true,
+        orderCreatedAt: true,
+        deliveryMethod: true,
+        total: true,
+        currencyCode: true,
+        createdAt: true,
+        release: {
+          select: { id: true, name: true, clubId: true, club: { select: { merchantId: true, name: true } } },
+        },
+      },
+    }),
+    prismaClubs.membershipBillingRecord.findMany({
+      where: { membership: { customerId: customer.id } },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+      select: {
+        id: true,
+        billingCycleStart: true,
+        billingCycleEnd: true,
+        amount: true,
+        currencyCode: true,
+        status: true,
+        platformOrderId: true,
+        errorMessage: true,
+        attemptCount: true,
+        createdAt: true,
+        membership: { select: { club: { select: { name: true } } } },
+      },
+    }),
+    prismaClubs.membershipEvent.findMany({
+      where: { membership: { customerId: customer.id } },
+      orderBy: { createdAt: 'desc' },
+      take: 25,
+      select: {
+        id: true,
+        type: true,
+        reason: true,
+        metadata: true,
+        createdAt: true,
+        membership: { select: { club: { select: { name: true } } } },
+      },
+    }),
+    prismaClubs.bundleSubscriptionEvent.findMany({
+      where: { membership: { customerId: customer.id } },
+      orderBy: { createdAt: 'desc' },
+      take: 25,
+      select: {
+        id: true,
+        type: true,
+        reason: true,
+        metadata: true,
+        createdAt: true,
+        membership: { select: { club: { select: { name: true } } } },
+      },
+    }),
+    prismaClubs.customerEmailLog.findMany({
+      where: { shop: customer.shop, sentTo: customer.defaultEmail },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+      select: {
+        id: true,
+        emailType: true,
+        success: true,
+        error: true,
+        createdAt: true,
+      },
+    }),
+  ]);
+
+  const fullName = [customer.firstName, customer.lastName].filter(Boolean).join(' ') || '—';
+  const heading = fullName !== '—' ? fullName : customer.defaultEmail;
+
+  // ─── Memberships ──────────────────────────────────────────────────
+  const memberships = customer.Membership.map((m) => ({
+    ...m,
+    merchantId: m.club.merchantId,
+    clubName: m.club.name,
+    merchantName: m.club.merchant.platformShopName ?? m.club.merchant.shop,
+  }));
+
   const membershipHeaders = [
     {
-      id: 'club',
+      id: 'clubName',
       title: 'Club',
-      formatter: (value: { name: string }) => value.name,
+      href: (_v: string, row: any) => `/clubs/merchants/${row.merchantId}/clubs/${row.clubId}`,
     },
+    { id: 'merchantName', title: 'Merchant' },
     {
       id: 'club',
-      title: 'Merchant',
-      formatter: (value: { merchant: { platformShopName: string | null; shop: string } }) =>
-        value.merchant.platformShopName ?? value.merchant.shop,
+      title: 'Type',
+      formatter: (club: { clubType: string }) => titleCase(club.clubType),
     },
     { id: 'memberNumber', title: 'Member #', formatter: (v: string | null) => v ?? '—' },
     {
       id: 'status',
       title: 'Status',
       formatter: (value: string) => (
-        <Badge color={membershipStatusColor[value] ?? 'gray'} variant="soft">
-          {value}
-        </Badge>
+        <Badge color={membershipStatusColor[value] ?? 'gray'} variant="soft">{value}</Badge>
       ),
+    },
+    {
+      id: 'bundleSubscription',
+      title: 'Subscription',
+      formatter: (sub: any) =>
+        sub ? (
+          <Badge color={subscriptionStatusColor[sub.status] ?? 'gray'} variant="soft">
+            {sub.status} · {titleCase(sub.frequency)}
+          </Badge>
+        ) : (
+          '—'
+        ),
+      href: (sub: any, row: any) =>
+        sub ? `/clubs/merchants/${row.merchantId}/clubs/${row.clubId}/subscriptions/${sub.id}` : undefined,
     },
     { id: 'joinedAt', title: 'Joined', formatter: dateFormatter },
     { id: 'leftAt', title: 'Left', formatter: (v: Date | null) => (v ? dateFormatter(v) : '—') },
-    { type: 'actions' as const, title: 'Actions' },
   ];
 
-  const memberships = customer.Membership.map((m) => ({ ...m, merchantId: m.club.merchantId }));
+  // ─── Release orders ───────────────────────────────────────────────
+  const releaseOrderRows = releaseOrders.map((o) => ({
+    ...o,
+    releaseName: o.release.name,
+    clubName: o.release.club.name,
+    merchantId: o.release.club.merchantId,
+    clubId: o.release.clubId,
+  }));
 
-  const fullName = [customer.firstName, customer.lastName].filter(Boolean).join(' ') || '—';
+  const releaseOrderHeaders = [
+    {
+      id: 'releaseName',
+      title: 'Release',
+      href: (_v: string, row: any) =>
+        `/clubs/merchants/${row.merchantId}/clubs/${row.clubId}/releases/${row.release.id}`,
+    },
+    { id: 'clubName', title: 'Club' },
+    {
+      id: 'skippedAt',
+      title: 'Status',
+      formatter: (skippedAt: Date | null, row: any) => {
+        if (skippedAt) return <Badge color="gray" variant="soft">Skipped</Badge>;
+        if (row.platformOrderId) return <Badge color="green" variant="soft">Ordered</Badge>;
+        return <Badge color="orange" variant="soft">Pending</Badge>;
+      },
+    },
+    { id: 'deliveryMethod', title: 'Delivery' },
+    { id: 'total', title: 'Total', formatter: (v: number, row: any) => money(v, row.currencyCode) },
+    {
+      id: 'orderCreatedAt',
+      title: 'Ordered',
+      formatter: (v: Date | null) => (v ? dateFormatter(v) : '—'),
+    },
+    { id: 'createdAt', title: 'Created', formatter: dateFormatter },
+  ];
+
+  // ─── Membership billing ───────────────────────────────────────────
+  const billingRows = billingRecords.map((b) => ({ ...b, clubName: b.membership.club.name }));
+
+  const billingHeaders = [
+    { id: 'clubName', title: 'Club' },
+    {
+      id: 'billingCycleStart',
+      title: 'Cycle',
+      formatter: (v: Date, row: any) => `${dateFormatter(v)} – ${dateFormatter(row.billingCycleEnd)}`,
+    },
+    { id: 'amount', title: 'Amount', formatter: (v: number, row: any) => money(v, row.currencyCode) },
+    {
+      id: 'status',
+      title: 'Status',
+      formatter: (v: string) => (
+        <Badge color={billingStatusColor[v] ?? 'gray'} variant="soft">{v}</Badge>
+      ),
+    },
+    { id: 'attemptCount', title: 'Attempts' },
+    {
+      id: 'errorMessage',
+      title: 'Error',
+      formatter: (v: string | null) =>
+        v ? (
+          <Text size="1" color="red" title={v}>
+            {v.slice(0, 50)}{v.length > 50 ? '…' : ''}
+          </Text>
+        ) : '—',
+    },
+    { id: 'createdAt', title: 'Created', formatter: dateFormatter },
+  ];
+
+  // ─── Activity timeline (membership + bundle events merged) ─────────
+  const activity = [
+    ...membershipEvents.map((e) => ({ ...e, kind: 'Membership' as const })),
+    ...bundleEvents.map((e) => ({ ...e, kind: 'Subscription' as const })),
+  ]
+    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+    .slice(0, 30)
+    .map((e) => ({ ...e, clubName: e.membership.club.name }));
+
+  const activityHeaders = [
+    { id: 'createdAt', title: 'When', formatter: dateTimeFormatter },
+    {
+      id: 'kind',
+      title: 'Source',
+      formatter: (v: string) => (
+        <Badge color={v === 'Subscription' ? 'purple' : 'blue'} variant="soft" size="1">{v}</Badge>
+      ),
+    },
+    { id: 'type', title: 'Event', formatter: (v: string) => titleCase(v) },
+    { id: 'clubName', title: 'Club' },
+    { id: 'reason', title: 'Reason', formatter: (v: string | null) => v ?? '—' },
+    {
+      id: 'metadata',
+      title: 'Detail',
+      formatter: (v: any) => (v ? <DataDialog title="Event Metadata" data={v} /> : '—'),
+    },
+  ];
+
+  // ─── Email log ────────────────────────────────────────────────────
+  const emailHeaders = [
+    { id: 'createdAt', title: 'Sent', formatter: dateTimeFormatter },
+    { id: 'emailType', title: 'Type', formatter: (v: string) => titleCase(v) },
+    {
+      id: 'success',
+      title: 'Result',
+      formatter: (v: boolean) => (
+        <Badge color={v ? 'green' : 'red'} variant="soft">{v ? 'Sent' : 'Failed'}</Badge>
+      ),
+    },
+    {
+      id: 'error',
+      title: 'Error',
+      formatter: (v: string | null) =>
+        v ? (
+          <Text size="1" color="red" title={v}>
+            {v.slice(0, 50)}{v.length > 50 ? '…' : ''}
+          </Text>
+        ) : '—',
+    },
+  ];
 
   return (
     <PageLayout
-      heading={fullName !== '—' ? fullName : customer.defaultEmail}
+      heading={heading}
       subheading={customer.shop}
       actions={[{ label: 'Back to Members', href: '/clubs/members', variant: 'soft', color: 'gray' }]}
     >
@@ -112,30 +357,61 @@ export default async function Page({ params }: { params: { id: string } }) {
         </Card>
 
         <Card>
-          <Heading size="3" mb="3">Membership Summary</Heading>
+          <Heading size="3" mb="3">Summary</Heading>
           <QuickDataList
             data={[
-              { label: 'Total', value: customer.Membership.length.toString() },
-              { label: 'Active', value: customer.Membership.filter(m => m.status === 'ACTIVE').length.toString() },
-              { label: 'Paused', value: customer.Membership.filter(m => m.status === 'PAUSED').length.toString() },
-              { label: 'Left', value: customer.Membership.filter(m => m.status === 'LEFT').length.toString() },
+              { label: 'Memberships', value: customer.Membership.length.toString() },
+              { label: 'Active', value: customer.Membership.filter((m) => m.status === 'ACTIVE').length.toString() },
+              { label: 'Paused', value: customer.Membership.filter((m) => m.status === 'PAUSED').length.toString() },
+              { label: 'Left', value: customer.Membership.filter((m) => m.status === 'LEFT').length.toString() },
+              {
+                label: 'Bundle Subscriptions',
+                value: customer.Membership.filter((m) => m.bundleSubscription).length.toString(),
+              },
+              { label: 'Release Orders', value: releaseOrders.length.toString() },
             ]}
           />
         </Card>
       </Grid>
 
-      <Box>
-        <Heading size="4" mb="3">Memberships</Heading>
-        {customer.Membership.length > 0 ? (
-          <DataTable
-            headers={membershipHeaders}
-            data={memberships}
-            Actions={MembershipActions}
-          />
+      <Box mb="6">
+        <Heading size="4" mb="3">Memberships ({customer.Membership.length})</Heading>
+        {memberships.length > 0 ? (
+          <DataTable headers={membershipHeaders} data={memberships} />
         ) : (
           <Text color="gray" size="2">No memberships.</Text>
         )}
       </Box>
+
+      <Box mb="6">
+        <Heading size="4" mb="3">Release Orders ({releaseOrderRows.length})</Heading>
+        {releaseOrderRows.length > 0 ? (
+          <DataTable headers={releaseOrderHeaders} data={releaseOrderRows} />
+        ) : (
+          <Text color="gray" size="2">No release orders.</Text>
+        )}
+      </Box>
+
+      {billingRows.length > 0 && (
+        <Box mb="6">
+          <Heading size="4" mb="3">Membership Billing ({billingRows.length})</Heading>
+          <DataTable headers={billingHeaders} data={billingRows} />
+        </Box>
+      )}
+
+      {activity.length > 0 && (
+        <Box mb="6">
+          <Heading size="4" mb="3">Activity ({activity.length})</Heading>
+          <DataTable headers={activityHeaders} data={activity} />
+        </Box>
+      )}
+
+      {emailLogs.length > 0 && (
+        <Box>
+          <Heading size="4" mb="3">Email Log ({emailLogs.length})</Heading>
+          <DataTable headers={emailHeaders} data={emailLogs} />
+        </Box>
+      )}
     </PageLayout>
   );
 }

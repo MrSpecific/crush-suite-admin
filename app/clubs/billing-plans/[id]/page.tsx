@@ -34,7 +34,7 @@ export default async function Page({ params }: { params: { id: string } }) {
       perUseCap: true,
       perUseUnits: true,
       perUseTerms: true,
-      accessibleStores: true,
+      // accessibleStores: true,
       merchants: {
         orderBy: { createdAt: 'desc' },
         select: {
@@ -57,8 +57,14 @@ export default async function Page({ params }: { params: { id: string } }) {
       id: 'status',
       title: 'Status',
       formatter: (value: string) => {
-        const meta = clubsMerchantStatusMetaData[value as keyof typeof clubsMerchantStatusMetaData] ?? { label: value, color: 'gray' };
-        return <Badge color={meta.color} variant="soft">{meta.label}</Badge>;
+        const meta = clubsMerchantStatusMetaData[
+          value as keyof typeof clubsMerchantStatusMetaData
+        ] ?? { label: value, color: 'gray' };
+        return (
+          <Badge color={meta.color} variant="soft">
+            {meta.label}
+          </Badge>
+        );
       },
     },
     { id: 'createdAt', title: 'Joined', formatter: dateFormatter },
@@ -125,13 +131,13 @@ export default async function Page({ params }: { params: { id: string } }) {
                     : 'None',
               },
               { label: 'Terms', value: plan.perUseTerms },
-              {
-                label: 'Accessible Stores',
-                value:
-                  plan.accessibleStores.length > 0
-                    ? plan.accessibleStores.join(', ')
-                    : 'All stores',
-              },
+              // {
+              //   label: 'Accessible Stores',
+              //   value:
+              //     plan.accessibleStores.length > 0
+              //       ? plan.accessibleStores.join(', ')
+              //       : 'All stores',
+              // },
             ]}
           />
         </Card>
