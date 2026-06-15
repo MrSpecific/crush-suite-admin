@@ -39,6 +39,19 @@ const connectionOptions: {
   })
 );
 
+// The default sort (no `sort` param) is newest install date first.
+const defaultSortLabel = 'Install Date (Newest)';
+const sortOptions: {
+  value: string;
+  label: string;
+  orderBy: Prisma.MerchantOrderByWithRelationInput;
+}[] = [
+  { value: 'installed_asc', label: 'Install Date (Oldest)', orderBy: { createdAt: 'asc' } },
+  { value: 'name_asc', label: 'Name (A to Z)', orderBy: { compliancePartnerAccountName: 'asc' } },
+  { value: 'name_desc', label: 'Name (Z to A)', orderBy: { compliancePartnerAccountName: 'desc' } },
+];
+const defaultMerchantOrderBy: Prisma.MerchantOrderByWithRelationInput = { createdAt: 'desc' };
+
 const Actions = ({ ...props }) => {
   return (
     <Flex gap="2">
@@ -51,11 +64,12 @@ const Actions = ({ ...props }) => {
 };
 
 export default async function Page({ searchParams }: { searchParams: PageSearchParams }) {
-  const { page, search, status, billingPlanId, connection } = searchParams;
+  const { page, search, status, billingPlanId, connection, sort } = searchParams;
   const searchString = search?.toString();
   const statusFilter = normalizeMerchantStatus(status);
   const billingPlanFilter = normalizeBillingPlanFilter(billingPlanId);
   const connectionFilter = normalizeConnectionFilter(connection);
+  const orderBy = getMerchantOrderBy(sort);
   const where = getMerchantWhere({
     search: searchString,
     status: statusFilter,
@@ -75,7 +89,7 @@ export default async function Page({ searchParams }: { searchParams: PageSearchP
     include: {
       billingPlan: true,
     },
-    orderBy: { createdAt: 'desc' },
+    orderBy,
   });
   type DataHeaders = QueryToHeader<typeof merchants>[];
 
@@ -134,6 +148,12 @@ export default async function Page({ searchParams }: { searchParams: PageSearchP
       allLabel: 'All connections',
       options: connectionOptions,
     },
+    {
+      label: 'Sort by',
+      name: 'sort',
+      allLabel: defaultSortLabel,
+      options: sortOptions.map(({ value, label }) => ({ value, label })),
+    },
   ];
 
   return (
@@ -169,6 +189,13 @@ const normalizeConnectionFilter = (connection?: string | string[]) => {
   return validConnections.includes(value as CompliancePartnerConnection)
     ? (value as CompliancePartnerConnection)
     : undefined;
+};
+
+const getMerchantOrderBy = (sort?: string | string[]) => {
+  const value = Array.isArray(sort) ? sort[0] : sort;
+  const option = sortOptions.find((o) => o.value === value);
+
+  return option?.orderBy ?? defaultMerchantOrderBy;
 };
 
 const normalizeMerchantStatus = (status?: string | string[]) => {
