@@ -1,9 +1,9 @@
 'use client';
-import { useId } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { Box, Button, Flex, Select, Text, TextField } from '@radix-ui/themes';
+import { Box, Button, Flex, IconButton, Select, Text, TextField } from '@radix-ui/themes';
 import * as Form from '@radix-ui/react-form';
-import { MagnifyingGlassIcon } from '@radix-ui/react-icons';
+import { Cross2Icon, MagnifyingGlassIcon } from '@radix-ui/react-icons';
 
 const allFilterValue = '__all__';
 
@@ -25,13 +25,27 @@ export const DataFilter = ({ filters = [] }: { filters?: SelectDataFilter[] }) =
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const params = new URLSearchParams(searchParams.toString());
-  const defaultValue = params.get('search') || '';
+  const currentSearch = params.get('search') || '';
   const searchInputId = useId();
+  const [searchValue, setSearchValue] = useState(currentSearch);
+
+  // Keep the input in sync when the URL search param changes (e.g. browser nav).
+  useEffect(() => {
+    setSearchValue(currentSearch);
+  }, [currentSearch]);
 
   const buildUrl = (params: URLSearchParams) => {
     const query = params.toString();
 
     return query ? `${pathname}?${query}` : pathname;
+  };
+
+  const clearSearch = () => {
+    setSearchValue('');
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete('page');
+    params.delete('search');
+    push(buildUrl(params));
   };
 
   return (
@@ -60,11 +74,26 @@ export const DataFilter = ({ filters = [] }: { filters?: SelectDataFilter[] }) =
           id={searchInputId}
           radius="large"
           name="textInput"
-          defaultValue={defaultValue}
+          value={searchValue}
+          onChange={(event) => setSearchValue(event.target.value)}
         >
           <TextField.Slot>
             <MagnifyingGlassIcon height="16" width="16" />
           </TextField.Slot>
+          {searchValue && (
+            <TextField.Slot>
+              <IconButton
+                type="button"
+                size="1"
+                variant="ghost"
+                color="gray"
+                aria-label="Clear search"
+                onClick={clearSearch}
+              >
+                <Cross2Icon height="16" width="16" />
+              </IconButton>
+            </TextField.Slot>
+          )}
           <Button type="submit">Search</Button>
         </TextField.Root>
       </Form.Root>

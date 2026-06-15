@@ -198,7 +198,10 @@ const getMerchantWhere = ({
   const where: Prisma.MerchantWhereInput = {};
 
   if (search) {
-    where.OR = [{ shop: { contains: search, mode: QueryMode.insensitive } }];
+    where.OR = [
+      { shop: { contains: search, mode: QueryMode.insensitive } },
+      { compliancePartnerAccountName: { contains: search, mode: QueryMode.insensitive } },
+    ];
   }
 
   if (status) {
