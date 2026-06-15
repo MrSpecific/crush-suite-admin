@@ -1,4 +1,5 @@
-import { Prisma, Status } from '@prisma/client';
+import { Prisma, Status, CompliancePartnerConnection } from '@prisma/client';
+import { compliancePartnerConnectionMetaData } from '@/lib/metaData';
 import { prisma, QueryMode } from '@/lib/prisma';
 import { PageLayout } from '@/app/components/PageLayout';
 import { DataTable } from '@/app/components/DataTable';
@@ -21,6 +22,14 @@ const merchantStatusOptions: { value: Status; label: string; color: RadixColor }
   { value: 'ERROR', label: 'Error', color: 'red' },
 ];
 
+const connectionOptions: { value: CompliancePartnerConnection; label: string; color: RadixColor }[] = (
+  Object.keys(compliancePartnerConnectionMetaData) as CompliancePartnerConnection[]
+).map((value) => ({
+  value,
+  label: compliancePartnerConnectionMetaData[value].label,
+  color: compliancePartnerConnectionMetaData[value].color,
+}));
+
 const Actions = ({ ...props }) => {
   return (
     <Flex gap="2">
@@ -33,14 +42,16 @@ const Actions = ({ ...props }) => {
 };
 
 export default async function Page({ searchParams }: { searchParams: PageSearchParams }) {
-  const { page, search, status, billingPlanId } = searchParams;
+  const { page, search, status, billingPlanId, connection } = searchParams;
   const searchString = search?.toString();
   const statusFilter = normalizeMerchantStatus(status);
   const billingPlanFilter = normalizeBillingPlanFilter(billingPlanId);
+  const connectionFilter = normalizeConnectionFilter(connection);
   const where = getMerchantWhere({
     search: searchString,
     status: statusFilter,
     billingPlan: billingPlanFilter,
+    connection: connectionFilter,
   });
   const [count, billingPlans] = await Promise.all([
     prisma.merchant.count({ where }),
@@ -108,10 +119,16 @@ export default async function Page({ searchParams }: { searchParams: PageSearchP
         })),
       ],
     },
+    {
+      label: 'Connection',
+      name: 'connection',
+      allLabel: 'All connections',
+      options: connectionOptions,
+    },
   ];
 
   return (
-    <PageLayout heading={getMerchantPageHeading(statusFilter)}>
+    <PageLayout heading={getMerchantPageHeading(statusFilter, connectionFilter)}>
       <DataFilter filters={filters} />
       <DataTable headers={headers} data={merchants} Actions={Actions} />
       <Pagination count={count} />
@@ -119,7 +136,9 @@ export default async function Page({ searchParams }: { searchParams: PageSearchP
   );
 }
 
-const getMerchantPageHeading = (status?: Status) => {
+const getMerchantPageHeading = (status?: Status, connection?: CompliancePartnerConnection) => {
+  if (connection === 'ERROR') return 'Connection Errors';
+
   if (!status) return 'Merchants';
 
   const headings: Partial<Record<Status, string>> = {
@@ -129,6 +148,18 @@ const getMerchantPageHeading = (status?: Status) => {
   };
 
   return headings[status] || 'Merchants';
+};
+
+const normalizeConnectionFilter = (connection?: string | string[]) => {
+  const value = Array.isArray(connection) ? connection[0] : connection;
+
+  if (!value) return undefined;
+
+  const validConnections = connectionOptions.map((option) => option.value);
+
+  return validConnections.includes(value as CompliancePartnerConnection)
+    ? (value as CompliancePartnerConnection)
+    : undefined;
 };
 
 const normalizeMerchantStatus = (status?: string | string[]) => {
@@ -157,10 +188,12 @@ const getMerchantWhere = ({
   search,
   status,
   billingPlan,
+  connection,
 }: {
   search?: string;
   status?: Status;
   billingPlan?: number | typeof noBillingPlanFilterValue;
+  connection?: CompliancePartnerConnection;
 }) => {
   const where: Prisma.MerchantWhereInput = {};
 
@@ -170,6 +203,10 @@ const getMerchantWhere = ({
 
   if (status) {
     where.status = status;
+  }
+
+  if (connection) {
+    where.compliancePartnerConnection = connection;
   }
 
   if (billingPlan === noBillingPlanFilterValue) {

@@ -261,6 +261,10 @@ const MerchantsDropdown = () => {
         <DropdownMenu.Item asChild onSelect={() => setOpen(false)}>
           <Link href="/merchants?status=REMOVED">Removed</Link>
         </DropdownMenu.Item>
+        <DropdownMenu.Separator />
+        <DropdownMenu.Item asChild onSelect={() => setOpen(false)}>
+          <Link href="/merchants?connection=ERROR">Connection Errors</Link>
+        </DropdownMenu.Item>
       </DropdownMenu.Content>
     </DropdownMenu.Root>
   );
