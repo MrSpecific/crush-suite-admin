@@ -6,7 +6,7 @@ import { DataTable } from '@/app/components/DataTable';
 import { EditDialog } from '@/app/components/EditDialog';
 import { Pagination } from '@/app/components/Pagination';
 import { queryPagination } from '@/lib/queryPagination';
-import { dateFormatter, linkToMerchantFormatter } from '@/lib/formatters';
+import { dateFormatter, linkToMerchantFormatter, merchantNameAndShop } from '@/lib/formatters';
 import { DataFilter, type SelectDataFilter } from '@/app/components/DataFilter';
 import { Flex, Badge } from '@radix-ui/themes';
 import { ButtonLink } from '@/app/components/ButtonLink';
@@ -22,13 +22,17 @@ const merchantStatusOptions: { value: Status; label: string; color: RadixColor }
   { value: 'ERROR', label: 'Error', color: 'red' },
 ];
 
-const connectionOptions: { value: CompliancePartnerConnection; label: string; color: RadixColor }[] = (
-  Object.keys(compliancePartnerConnectionMetaData) as CompliancePartnerConnection[]
-).map((value) => ({
-  value,
-  label: compliancePartnerConnectionMetaData[value].label,
-  color: compliancePartnerConnectionMetaData[value].color,
-}));
+const connectionOptions: {
+  value: CompliancePartnerConnection;
+  label: string;
+  color: RadixColor;
+}[] = (Object.keys(compliancePartnerConnectionMetaData) as CompliancePartnerConnection[]).map(
+  (value) => ({
+    value,
+    label: compliancePartnerConnectionMetaData[value].label,
+    color: compliancePartnerConnectionMetaData[value].color,
+  })
+);
 
 const Actions = ({ ...props }) => {
   return (
@@ -73,8 +77,8 @@ export default async function Page({ searchParams }: { searchParams: PageSearchP
   const headers: DataHeaders = [
     { type: 'data', title: 'Data' },
     // { id: 'id', title: 'ID' },
-    { id: 'compliancePartnerAccountName', title: 'Name', formatter: linkToMerchantFormatter },
-    { id: 'shop', title: 'Shop', formatter: linkToMerchantFormatter },
+    { id: 'compliancePartnerAccountName', title: 'Name', formatter: merchantNameAndShop },
+    // { id: 'shop', title: 'Shop', formatter: linkToMerchantFormatter },
     // { id: 'createdAt', title: 'Created At', formatter: dateFormatter },
     // { id: 'updatedAt', title: 'Updated At', formatter: dateFormatter },
     // { id: 'uninstalledAt', title: 'Uninstalled At', formatter: dateFormatter },

@@ -20,6 +20,15 @@ export const merchantFormatter = (value: any) => (
   </Box>
 );
 
+export const merchantNameAndShop = (value: any, row: any) => (
+  <Link href={`/merchants/${row.merchantId || row.id}`}>
+    <Flex direction="column">{value}</Flex>
+    <Text size="2" color="gray">
+      {row.shop}
+    </Text>
+  </Link>
+);
+
 export const linkToMerchantFormatter = (value: any, row: any) => (
   <Link href={`/merchants/${row.merchantId || row.id}`}>{value}</Link>
 );
