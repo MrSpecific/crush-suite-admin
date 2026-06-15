@@ -3,6 +3,7 @@ import { Box, Text, Button, Dialog, Flex, IconButton, Badge } from '@radix-ui/th
 import { ExclamationTriangleIcon } from '@radix-ui/react-icons';
 import { clubStatusMetaData, clubTypeMetaData, orderStatusMetaData } from './metaData';
 import { RadixColor } from '@/types/radix-ui';
+import { CompliancePartnerConnectionBadge } from '@/app/components/CompliancePartnerConnectionBadge';
 
 export const dateFormatter = (value: Date) => (value ? value.toLocaleDateString() : '');
 
@@ -28,6 +29,15 @@ export const merchantNameAndShop = (value: any, row: any) => (
     </Text>
   </Link>
 );
+
+export const compliancePartnerFormatter = (value: any, row: any) => {
+  return (
+    <Flex direction="column" gap="1" align="center">
+      <Text size="1">{value}</Text>
+      <CompliancePartnerConnectionBadge connection={row.compliancePartnerConnection} />
+    </Flex>
+  );
+};
 
 export const linkToMerchantFormatter = (value: any, row: any) => (
   <Link href={`/merchants/${row.merchantId || row.id}`}>{value}</Link>
