@@ -8,6 +8,7 @@ import { DataFilter } from '@/app/components/DataFilter';
 import { DataTable } from '@/app/components/DataTable';
 import { Pagination } from '@/app/components/Pagination';
 import { QuickDataList } from '@/app/components/QuickDataList';
+import { CompliancePartnerConnectionBadge } from '@/app/components/CompliancePartnerConnectionBadge';
 import { ComplianceMap, type StateRecord } from '@/app/components/ComplianceMap';
 import { queryPagination } from '@/lib/queryPagination';
 import {
@@ -167,6 +168,7 @@ export default async function Page({
   const {
     shop,
     compliancePartner,
+    compliancePartnerConnection,
     compliancePartnerId,
     compliancePartnerAccountName,
     status,
@@ -206,6 +208,12 @@ export default async function Page({
             data={[
               { label: 'Shop', value: shop, linkTo: `//${shop}` },
               { label: 'Compliance Partner', value: compliancePartner },
+              {
+                label: 'Connection',
+                children: compliancePartnerConnection ? (
+                  <CompliancePartnerConnectionBadge connection={compliancePartnerConnection} />
+                ) : undefined,
+              },
               { label: 'Compliance Partner ID', value: compliancePartnerId },
               { label: 'Billing Plan', value: billingPlan?.name },
               { label: 'Status', value: status, badge: true },

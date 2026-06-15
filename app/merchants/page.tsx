@@ -9,6 +9,7 @@ import { dateFormatter, linkToMerchantFormatter } from '@/lib/formatters';
 import { DataFilter, type SelectDataFilter } from '@/app/components/DataFilter';
 import { Flex, Badge } from '@radix-ui/themes';
 import { ButtonLink } from '@/app/components/ButtonLink';
+import { CompliancePartnerConnectionBadge } from '@/app/components/CompliancePartnerConnectionBadge';
 import { RadixColor } from '@/types/radix-ui';
 
 const noBillingPlanFilterValue = 'none';
@@ -63,7 +64,7 @@ export default async function Page({ searchParams }: { searchParams: PageSearchP
     // { id: 'id', title: 'ID' },
     { id: 'compliancePartnerAccountName', title: 'Name', formatter: linkToMerchantFormatter },
     { id: 'shop', title: 'Shop', formatter: linkToMerchantFormatter },
-    { id: 'createdAt', title: 'Created At', formatter: dateFormatter },
+    // { id: 'createdAt', title: 'Created At', formatter: dateFormatter },
     // { id: 'updatedAt', title: 'Updated At', formatter: dateFormatter },
     // { id: 'uninstalledAt', title: 'Uninstalled At', formatter: dateFormatter },
     // { id: 'syncedAt', title: 'Synced At', formatter: dateFormatter },
@@ -80,6 +81,11 @@ export default async function Page({ searchParams }: { searchParams: PageSearchP
     },
     { id: 'billingPlan', title: 'Billing Plan', formatter: (value) => value?.name },
     { id: 'compliancePartner', title: 'Compliance Partner' },
+    {
+      id: 'compliancePartnerConnection',
+      title: 'Connection',
+      formatter: (value) => <CompliancePartnerConnectionBadge connection={value} />,
+    },
     { type: 'actions', title: 'Actions' },
   ];
 

@@ -1,4 +1,4 @@
-import { OrderStatus, ProductCategory, AppIssueType } from '@prisma/client';
+import { OrderStatus, ProductCategory, AppIssueType, CompliancePartnerConnection } from '@prisma/client';
 import type { RadixColor } from '@/types/radix-ui';
 import { DOMElement } from 'react';
 import type { ClubStatus, ClubType, Status as ClubsMerchantStatus, MerchantEmailType } from '../generated/prisma/clubs';
@@ -77,6 +77,19 @@ export const appIssueTypeMetaData: Record<AppIssueType, EnumMetaData> = {
   CUSTOMERS: { label: 'Customers', color: 'purple' },
   ORDERS: { label: 'Orders', color: 'orange' },
   COMPLIANCE_PRODUCTS: { label: 'Compliance Products', color: 'red' },
+};
+
+export const compliancePartnerConnectionMetaData: Record<CompliancePartnerConnection, EnumMetaData> = {
+  ACTIVE: {
+    label: 'Active',
+    color: 'green',
+    description: 'Compliance partner integration is connected and healthy',
+  },
+  ERROR: {
+    label: 'Error',
+    color: 'red',
+    description: 'Compliance partner integration encountered an error',
+  },
 };
 
 export const merchantEmailTypeMetaData: Record<MerchantEmailType, EnumMetaData> = {
