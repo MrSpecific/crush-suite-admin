@@ -211,7 +211,21 @@ export default async function Page({ params }: { params: { id: string } }) {
                     ? `${data.transactionMonth}/${data.transactionYear}`
                     : undefined,
               },
+              {
+                label: 'Pickup Order',
+                children: (
+                  <Badge color={data.isPickup ? 'amber' : 'gray'} variant="soft">
+                    {data.isPickup ? 'Yes' : 'No'}
+                  </Badge>
+                ),
+              },
               { label: 'UPS Pickup ID', value: data.upsPickupId, clipboard: true },
+              {
+                label: 'Last Compliance Poll',
+                value: data.compliancePartnerLastPolledAt
+                  ? dateTimeFormatter(data.compliancePartnerLastPolledAt)
+                  : undefined,
+              },
               { label: 'Created At', value: dateTimeFormatter(data.createdAt) },
               { label: 'Updated At', value: dateTimeFormatter(data.updatedAt) },
               { label: 'Update Count', value: String(data.updatedCount) },

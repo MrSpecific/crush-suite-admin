@@ -113,6 +113,18 @@ export default async function Page({ searchParams }: { searchParams: PageSearchP
       },
     },
     { id: 'billingPlan', title: 'Billing Plan', formatter: (value) => value?.name },
+    {
+      id: 'isShopifyPlus',
+      title: 'Plus',
+      formatter: (value) =>
+        value ? (
+          <Badge color="iris" variant="soft">
+            Plus
+          </Badge>
+        ) : (
+          '—'
+        ),
+    },
     { id: 'compliancePartner', title: 'Compliance Partner', formatter: compliancePartnerFormatter },
     { id: 'createdAt', title: 'Installed', formatter: dateFormatter },
     // {

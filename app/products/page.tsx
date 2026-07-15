@@ -1,3 +1,4 @@
+import { Badge } from '@radix-ui/themes';
 import { prisma, QueryMode } from '@/lib/prisma';
 import { PageLayout } from '@/app/components/PageLayout';
 import { DataFilter } from '@/app/components/DataFilter';
@@ -57,6 +58,18 @@ export default async function Page({ searchParams }: { searchParams: PageSearchP
     // { id: 'syncedAt', title: 'Synced At', formatter: dateFormatter },
     // { id: 'platform', title: 'Platform' },
     { id: 'compliancePartner', title: 'Compliance Partner' },
+    {
+      id: 'compliancePartnerValidationError',
+      title: 'Validation',
+      formatter: (value) =>
+        value ? (
+          <Badge color="red" variant="soft">
+            Error
+          </Badge>
+        ) : (
+          '—'
+        ),
+    },
     // { type: 'actions', title: 'Actions' },
   ];
 

@@ -1,4 +1,4 @@
-import { Order } from '@prisma/client';
+import { Order, ShipCompliantSyncJob } from '@prisma/client';
 import { prisma, QueryMode } from '@/lib/prisma';
 import { Badge, Box, Card, Flex, Grid, Heading, Text } from '@radix-ui/themes';
 import { Link } from '@/app/components/Link';
@@ -7,7 +7,7 @@ import { PageLayout } from '@/app/components/PageLayout';
 import { DataFilter } from '@/app/components/DataFilter';
 import { DataTable } from '@/app/components/DataTable';
 import { Pagination } from '@/app/components/Pagination';
-import { QuickDataList } from '@/app/components/QuickDataList';
+import { QuickDataList, type DataListItem } from '@/app/components/QuickDataList';
 import { CompliancePartnerConnectionBadge } from '@/app/components/CompliancePartnerConnectionBadge';
 import { ComplianceMap, type StateRecord } from '@/app/components/ComplianceMap';
 import { queryPagination } from '@/lib/queryPagination';
@@ -132,6 +132,10 @@ export default async function Page({
     },
     include: {
       billingPlan: true,
+      ShipCompliantSyncJob: {
+        orderBy: { createdAt: 'desc' },
+        take: 5,
+      },
     },
   });
 
@@ -177,6 +181,7 @@ export default async function Page({
     salesUSAStates,
     platformEmail,
   } = data;
+  const isShipCompliant = compliancePartner === 'SHIPCOMPLIANT';
   const stateList = salesUSAStates ? (salesUSAStates as StateRecord[]).map((s) => s.name) : [];
   const billingSummary = getMerchantBillingSummary({
     billingPlan,
@@ -205,30 +210,106 @@ export default async function Page({
       <Grid columns={{ initial: '1', md: '2' }} gap="4">
         <Box>
           <QuickDataList
-            data={[
-              { label: 'Shop', value: shop, linkTo: `//${shop}` },
-              { label: 'Compliance Partner', value: compliancePartner },
-              {
-                label: 'Connection',
-                children: compliancePartnerConnection ? (
-                  <CompliancePartnerConnectionBadge connection={compliancePartnerConnection} />
-                ) : undefined,
-              },
-              { label: 'Compliance Partner ID', value: compliancePartnerId },
-              { label: 'Billing Plan', value: billingPlan?.name },
-              { label: 'Status', value: status, badge: true },
-              { label: 'Platform Plan', value: platformPlanName },
-              { label: 'Admin Email', value: platformEmail, linkTo: `mailto:${platformEmail}` },
-              { label: 'Created On', value: dateFormatter(data.createdAt) },
-              { label: 'Updated On', value: dateFormatter(data.updatedAt) },
-              { label: 'Synced On', value: data.syncedAt ? dateFormatter(data.syncedAt) : 'Never' },
-              {
-                label: 'Uninstalled On',
-                value: data.uninstalledAt ? dateFormatter(data.uninstalledAt) : undefined,
-                badge: true,
-                color: 'orange',
-              },
-            ]}
+            data={
+              [
+                { label: 'Shop', value: shop, linkTo: `//${shop}` },
+                { label: 'Compliance Partner', value: compliancePartner },
+                {
+                  label: 'Connection',
+                  children: compliancePartnerConnection ? (
+                    <CompliancePartnerConnectionBadge connection={compliancePartnerConnection} />
+                  ) : undefined,
+                },
+                { label: 'Compliance Partner ID', value: compliancePartnerId },
+                { label: 'Billing Plan', value: billingPlan?.name },
+                { label: 'Status', value: status, badge: true },
+                { label: 'Platform Plan', value: platformPlanName },
+                {
+                  label: 'Shopify Plus',
+                  children: (
+                    <Badge color={data.isShopifyPlus ? 'iris' : 'gray'} variant="soft">
+                      {data.isShopifyPlus ? 'Yes' : 'No'}
+                    </Badge>
+                  ),
+                },
+                data.isShopifyPlus
+                  ? {
+                      label: 'Plus Checkout Extension',
+                      children: (
+                        <Badge
+                          color={data.plusCheckoutExtensionEnabled ? 'green' : 'gray'}
+                          variant="soft"
+                        >
+                          {data.plusCheckoutExtensionEnabled ? 'Enabled' : 'Disabled'}
+                        </Badge>
+                      ),
+                    }
+                  : undefined,
+                isShipCompliant
+                  ? {
+                      label: 'SC Fulfillment Code',
+                      value: data.shipCompliantFulfillmentCode,
+                      clipboard: true,
+                    }
+                  : undefined,
+                isShipCompliant
+                  ? {
+                      label: 'SC Shipping Service Code',
+                      value: data.shipCompliantShippingServiceCode,
+                      clipboard: true,
+                    }
+                  : undefined,
+                isShipCompliant
+                  ? {
+                      label: 'SC Precise Tax',
+                      children: (
+                        <Badge
+                          color={
+                            data.shipCompliantPreciseTaxEnabled == null
+                              ? 'blue'
+                              : data.shipCompliantPreciseTaxEnabled
+                                ? 'green'
+                                : 'gray'
+                          }
+                          variant="soft"
+                        >
+                          {data.shipCompliantPreciseTaxEnabled == null
+                            ? 'Auto'
+                            : data.shipCompliantPreciseTaxEnabled
+                              ? 'Enabled'
+                              : 'Disabled'}
+                        </Badge>
+                      ),
+                    }
+                  : undefined,
+                isShipCompliant
+                  ? {
+                      label: 'SC Sync Fulfillment → Shopify',
+                      children: (
+                        <Badge
+                          color={data.shipCompliantSyncFulfillmentToShopify ? 'green' : 'gray'}
+                          variant="soft"
+                        >
+                          {data.shipCompliantSyncFulfillmentToShopify ? 'Yes' : 'No'}
+                        </Badge>
+                      ),
+                    }
+                  : undefined,
+                { label: 'Admin Email', value: platformEmail, linkTo: `mailto:${platformEmail}` },
+                { label: 'Created On', value: dateFormatter(data.createdAt) },
+                { label: 'Updated On', value: dateFormatter(data.updatedAt) },
+                {
+                  label: 'Synced On',
+                  value: data.syncedAt ? dateFormatter(data.syncedAt) : 'Never',
+                },
+                {
+                  label: 'Uninstalled On',
+                  value: data.uninstalledAt ? dateFormatter(data.uninstalledAt) : undefined,
+                  badge: true,
+                  color: 'orange',
+                },
+              ].filter(Boolean) as DataListItem[]
+            }
           />
         </Box>
         <Box>
@@ -247,6 +328,8 @@ export default async function Page({
       />
 
       <ShopifyBillingCard lookup={shopifyBillingLookup} />
+
+      {isShipCompliant && <MerchantSyncJobs jobs={data.ShipCompliantSyncJob} />}
 
       <MerchantOrders orders={orders} merchantId={id} count={orderCount} />
 
@@ -545,6 +628,48 @@ const ShopifyBillingCard = ({ lookup }: { lookup: ShopifyBillingLookup }) => {
         <Text color="gray" size="2">{error || 'No active app subscription found.'}</Text>
       )}
     </Card>
+  );
+};
+
+const syncJobKindLabels: Record<string, string> = {
+  product_sync_bulk: 'Bulk Product Sync',
+  product_sync_single: 'Single Product Sync',
+};
+
+const MerchantSyncJobs = ({ jobs }: { jobs: ShipCompliantSyncJob[] }) => {
+  return (
+    <Box my="4">
+      <Heading mb="2">Recent ShipCompliant Sync Jobs</Heading>
+      {jobs.length > 0 ? (
+        <DataTable
+          headers={[
+            { id: 'kind', title: 'Kind', formatter: (v: string) => syncJobKindLabels[v] ?? v },
+            { id: 'total', title: 'Total' },
+            {
+              id: 'succeeded',
+              title: 'Succeeded',
+              formatter: (v: number) => <Text color="green">{v}</Text>,
+            },
+            {
+              id: 'failed',
+              title: 'Failed',
+              formatter: (v: number) => <Text color={v > 0 ? 'red' : 'gray'}>{v}</Text>,
+            },
+            { id: 'createdAt', title: 'Started', formatter: dateTimeFormatter },
+            {
+              id: 'completedAt',
+              title: 'Completed',
+              formatter: (v: Date | null) => (v ? dateTimeFormatter(v) : 'In progress'),
+            },
+          ]}
+          data={jobs}
+        />
+      ) : (
+        <Text color="gray" size="2">
+          No sync jobs recorded for this merchant.
+        </Text>
+      )}
+    </Box>
   );
 };
 

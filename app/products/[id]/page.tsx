@@ -29,6 +29,7 @@ export default async function Page({ params }: { params: { id: string } }) {
   if (!id || !data) return <NotFound message="Product Not Found" />;
 
   const { merchant } = data;
+  const isShipCompliant = data.compliancePartner === 'SHIPCOMPLIANT';
 
   return (
     <PageLayout
@@ -193,36 +194,72 @@ export default async function Page({ params }: { params: { id: string } }) {
             Platform And Compliance
           </Heading>
           <QuickDataList
-            data={[
-              { label: 'Platform', value: data.platform, badge: true, color: 'gray' },
-              { label: 'Shop', value: data.shop, linkTo: formatAsUrl(data.shop), target: '_blank' },
-              {
-                label: 'Compliance Partner',
-                value: data.compliancePartner,
-                badge: true,
-                color: 'blue',
-              },
-              { label: 'Compliance Partner ID', value: data.compliancePartnerId, clipboard: true },
-              {
-                label: 'Compliance Product ID',
-                value: data.compliancePartnerProductId,
-                clipboard: true,
-              },
-              { label: 'Platform Product ID', value: data.platformProductId, clipboard: true },
-              { label: 'Platform Variant ID', value: data.platformVariantId, clipboard: true },
-              {
-                label: 'Has Options',
-                value: data.hasOptions ? 'Yes' : 'No',
-                badge: true,
-                color: data.hasOptions ? 'teal' : 'gray',
-              },
-              { label: 'Created At', value: dateTimeFormatter(data.createdAt) },
-              { label: 'Updated At', value: dateTimeFormatter(data.updatedAt) },
-              {
-                label: 'Synced At',
-                value: data.syncedAt ? dateTimeFormatter(data.syncedAt) : 'Never',
-              },
-            ]}
+            data={
+              [
+                { label: 'Platform', value: data.platform, badge: true, color: 'gray' },
+                {
+                  label: 'Shop',
+                  value: data.shop,
+                  linkTo: formatAsUrl(data.shop),
+                  target: '_blank',
+                },
+                {
+                  label: 'Compliance Partner',
+                  value: data.compliancePartner,
+                  badge: true,
+                  color: 'blue',
+                },
+                { label: 'Compliance Partner ID', value: data.compliancePartnerId, clipboard: true },
+                {
+                  label: 'Compliance Product ID',
+                  value: data.compliancePartnerProductId,
+                  clipboard: true,
+                },
+                isShipCompliant
+                  ? {
+                      label: 'Compliance Brand ID',
+                      value: data.compliancePartnerBrandId,
+                      clipboard: true,
+                    }
+                  : undefined,
+                isShipCompliant
+                  ? {
+                      label: 'Compliance Validation',
+                      children: data.compliancePartnerValidatedAt ? (
+                        <Badge color="green">
+                          Validated {dateTimeFormatter(data.compliancePartnerValidatedAt)}
+                        </Badge>
+                      ) : (
+                        <Badge color="orange">Not validated</Badge>
+                      ),
+                    }
+                  : undefined,
+                isShipCompliant && data.compliancePartnerValidationError
+                  ? {
+                      label: 'Validation Error',
+                      children: (
+                        <Text color="red" size="2">
+                          {data.compliancePartnerValidationError}
+                        </Text>
+                      ),
+                    }
+                  : undefined,
+                { label: 'Platform Product ID', value: data.platformProductId, clipboard: true },
+                { label: 'Platform Variant ID', value: data.platformVariantId, clipboard: true },
+                {
+                  label: 'Has Options',
+                  value: data.hasOptions ? 'Yes' : 'No',
+                  badge: true,
+                  color: data.hasOptions ? 'teal' : 'gray',
+                },
+                { label: 'Created At', value: dateTimeFormatter(data.createdAt) },
+                { label: 'Updated At', value: dateTimeFormatter(data.updatedAt) },
+                {
+                  label: 'Synced At',
+                  value: data.syncedAt ? dateTimeFormatter(data.syncedAt) : 'Never',
+                },
+              ].filter(Boolean) as QuickDataListItem[]
+            }
           />
         </Card>
       </Grid>

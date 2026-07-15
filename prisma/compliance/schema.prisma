@@ -10,123 +10,136 @@ datasource db {
 }
 
 model Merchant {
-  id                           Int                           @id @default(autoincrement())
-  createdAt                    DateTime                      @default(now())
-  updatedAt                    DateTime                      @updatedAt
-  uninstalledAt                DateTime?
-  syncedAt                     DateTime?
-  platform                     String                        @default("shopify")
-  shop                         String                        @unique
-  accessToken                  String?
-  status                       Status
-  billingPlanId                Int?
-  subscriptionDiscountId       Int?
-  platformBillingId            String?
-  platformBillingStatus        String?
-  compliancePartner            CompliancePartner             @default(VINOSHIPPER)
-  compliancePartnerId          String?
-  compliancePartnerAccountName String?
-  compliancePartnerApiPub      String?
-  compliancePartnerApiSec      String?
-  compliancePartnerConnection  CompliancePartnerConnection?
-  onboardedSteps               String[]                      @default([])
-  onboardedAt                  DateTime?
-  productsSyncedAt             DateTime?
-  productsSyncLockId           String? // parsed from job id. created at the beginning of the job, removed at the end. used to prevent concurrency of a job
-  productsSyncForceUpdate      Boolean                       @default(false)
-  merchantSyncForceUpdate      Boolean                       @default(false)
-  orderSyncBlock               Boolean                       @default(false)
-  headlessShopifyEnabled       Boolean                       @default(false) // if the merchant is using headless shopify
-  customersSyncedAt            DateTime?
-  websitePreferences           Json?
-  deliveryOptions              Json?
-  salesUSAStates               Json?
-  minimumOrderQuantity         Int                           @default(1) // eq to 750ml bottle
-  maximumOrderQuantity         Int?
-  enabledShippingClasses       Json?
-  inStorePickupRateCode        String? // the rate code for the UPS Store Pickup
-  fulfillmentPartner           FulfillmentPartner            @default(VINOSHIPPER)
-  platformCarrierServiceId     String?
-  platformCarrierServiceName   String?
-  platformShippingProfileId    String? // the primary shipping profile for alcohol products
-  platformShippingProfileIds   String[]                      @default([]) // all shipping profile ids
+  id                                    Int                           @id @default(autoincrement())
+  createdAt                             DateTime                      @default(now())
+  updatedAt                             DateTime                      @updatedAt
+  uninstalledAt                         DateTime?
+  syncedAt                              DateTime?
+  platform                              String                        @default("shopify")
+  shop                                  String                        @unique
+  accessToken                           String?
+  status                                Status
+  billingPlanId                         Int?
+  subscriptionDiscountId                Int?
+  platformBillingId                     String?
+  platformBillingStatus                 String?
+  compliancePartner                     CompliancePartner             @default(VINOSHIPPER)
+  compliancePartnerId                   String?
+  compliancePartnerAccountName          String?
+  compliancePartnerApiPub               String?
+  compliancePartnerApiSec               String?
+  compliancePartnerConnection           CompliancePartnerConnection?
+  // ShipCompliant-specific operational config
+  shipCompliantFulfillmentCode          String?
+  shipCompliantShippingServiceCode      String?
+  shipCompliantPreciseTaxEnabled        Boolean? // null = auto-detect from platformPlanName
+  shipCompliantSyncFulfillmentToShopify Boolean                       @default(true)
+  onboardedSteps                        String[]                      @default([])
+  onboardedAt                           DateTime?
+  productsSyncedAt                      DateTime?
+  productsSyncLockId                    String? // parsed from job id. created at the beginning of the job, removed at the end. used to prevent concurrency of a job
+  productsSyncForceUpdate               Boolean                       @default(false)
+  merchantSyncForceUpdate               Boolean                       @default(false)
+  orderSyncBlock                        Boolean                       @default(false)
+  headlessShopifyEnabled                Boolean                       @default(false) // if the merchant is using headless shopify
+  customersSyncedAt                     DateTime?
+  websitePreferences                    Json?
+  deliveryOptions                       Json?
+  salesUSAStates                        Json?
+  minimumOrderQuantity                  Int                           @default(1) // eq to 750ml bottle
+  maximumOrderQuantity                  Int?
+  enabledShippingClasses                Json?
+  inStorePickupRateCode                 String? // the rate code for the UPS Store Pickup
+  fulfillmentPartner                    FulfillmentPartner            @default(VINOSHIPPER)
+  platformCarrierServiceId              String?
+  platformCarrierServiceName            String?
+  platformShippingProfileId             String? // the primary shipping profile for alcohol products
+  platformShippingProfileIds            String[]                      @default([]) // all shipping profile ids
   // below are generally analytics data, don't rely on them for business logic
-  platformEmail                String?
-  platformPlanName             String?
-  platformShopName             String? // without the .myshopify.com
-  platformTimezone             String?
-  platformZipCode              String?
-  platformStateCode            String?
-  platformPhone                String?
-  platformCity                 String?
+  platformEmail                         String?
+  platformPlanName                      String?
+  isShopifyPlus                         Boolean                       @default(false)
+  plusCheckoutExtensionEnabled          Boolean                       @default(false) // feature flag for checkout-extension + cart-transform Function
+  platformShopName                      String? // without the .myshopify.com
+  platformTimezone                      String?
+  platformZipCode                       String?
+  platformStateCode                     String?
+  platformPhone                         String?
+  platformCity                          String?
   //
-  platformTaxCollectionId      String? // the collection ID used for tax collection on alcohol products
-  products                     Product[]
-  customers                    Customer[]
-  billingPlan                  BillingPlan?                  @relation(fields: [billingPlanId], references: [id])
-  subscriptionDiscount         SubscriptionDiscount?         @relation(fields: [subscriptionDiscountId], references: [id])
-  orders                       Order[]
-  ComplianceProduct            ComplianceProduct[]
-  appIssues                    AppIssue[]
-  PrecomplianceEvent           PrecomplianceEvent[]
-  ComplianceCheckedCustomer    ComplianceCheckedCustomer[]
-  ApiAccess                    ApiAccess[]
-  MerchantShippingProfile      MerchantShippingStateConfig[]
-  MerchantBulkOperation        MerchantBulkOperation[]
-  GDPR                         GDPR[]
+  platformTaxCollectionId               String? // the collection ID used for tax collection on alcohol products
+  products                              Product[]
+  customers                             Customer[]
+  billingPlan                           BillingPlan?                  @relation(fields: [billingPlanId], references: [id])
+  subscriptionDiscount                  SubscriptionDiscount?         @relation(fields: [subscriptionDiscountId], references: [id])
+  orders                                Order[]
+  ComplianceProduct                     ComplianceProduct[]
+  appIssues                             AppIssue[]
+  PrecomplianceEvent                    PrecomplianceEvent[]
+  ComplianceCheckedCustomer             ComplianceCheckedCustomer[]
+  ApiAccess                             ApiAccess[]
+  MerchantShippingProfile               MerchantShippingStateConfig[]
+  MerchantBulkOperation                 MerchantBulkOperation[]
+  GDPR                                  GDPR[]
+  ShipCompliantSyncJob                  ShipCompliantSyncJob[]
 
   @@index([shop])
 }
 
 model Product {
-  id                         Int               @id @default(autoincrement())
-  createdAt                  DateTime          @default(now())
-  updatedAt                  DateTime          @default(now())
-  name                       String
-  platform                   String            @default("shopify")
-  shop                       String
-  compliancePartner          CompliancePartner @default(VINOSHIPPER)
-  compliancePartnerId        String?
-  compliancePartnerProductId String?
-  alcohol                    Boolean
-  abv                        String?
-  volume                     String?
-  volumeUnits                String            @default("ml")
-  minOrder                   Int               @default(1)
-  maxOrder                   Int               @default(0) // 0 means no limit
-  moqUnits                   Float             @default(1) // For the min order quantity on a total purchase level - this is a multiplier
-  excludeFromMinOrderQty     Boolean           @default(false) // Some products, like merchandise, can be excluded in the min order qty
-  vintage                    String?
-  varietal                   String?
-  type                       String?
-  published                  Boolean           @default(true)
-  clubMemberOnly             Boolean           @default(false)
-  platformProductId          String?
-  platformVariantId          String?
-  productVariantAllOptions   Json?
-  productVariantOptions      Json?
-  hasOptions                 Boolean           @default(false)
-  syncedAt                   DateTime?
-  productCategory            ProductCategory
-  alcoholData                Json?
-  noSaleStatesData           Json?
-  priceData                  Json?
-  inventory                  Int               @default(0)
-  price                      Float             @default(0)
-  sku                        String            @default("")
-  weight                     Float             @default(0)
-  weightUnit                 WeightUnit        @default(lb)
-  archived                   Boolean           @default(false)
-  multipack                  Boolean           @default(false)
-  imageUrl                   String?
-  handle                     String? // used for the product URL, eg /products/1
-  descriptionText            String? // product description, just the text, no HTML
-  merchantId                 Int
-  merchant                   Merchant          @relation(fields: [merchantId], references: [id])
+  id                               Int               @id @default(autoincrement())
+  createdAt                        DateTime          @default(now())
+  updatedAt                        DateTime          @default(now())
+  name                             String
+  platform                         String            @default("shopify")
+  shop                             String
+  compliancePartner                CompliancePartner @default(VINOSHIPPER)
+  compliancePartnerId              String?
+  compliancePartnerProductId       String?
+  // ShipCompliant validation state (other partners leave these null)
+  compliancePartnerBrandId         String?
+  compliancePartnerValidatedAt     DateTime?
+  compliancePartnerValidationError String?
+  alcohol                          Boolean
+  abv                              String?
+  volume                           String?
+  volumeUnits                      String            @default("ml")
+  minOrder                         Int               @default(1)
+  maxOrder                         Int               @default(0) // 0 means no limit
+  moqUnits                         Float             @default(1) // For the min order quantity on a total purchase level - this is a multiplier
+  excludeFromMinOrderQty           Boolean           @default(false) // Some products, like merchandise, can be excluded in the min order qty
+  vintage                          String?
+  varietal                         String?
+  type                             String?
+  published                        Boolean           @default(true)
+  clubMemberOnly                   Boolean           @default(false)
+  platformProductId                String?
+  platformVariantId                String?
+  productVariantAllOptions         Json?
+  productVariantOptions            Json?
+  hasOptions                       Boolean           @default(false)
+  syncedAt                         DateTime?
+  productCategory                  ProductCategory
+  alcoholData                      Json?
+  noSaleStatesData                 Json?
+  priceData                        Json?
+  inventory                        Int               @default(0)
+  price                            Float             @default(0)
+  sku                              String            @default("")
+  weight                           Float             @default(0)
+  weightUnit                       WeightUnit        @default(lb)
+  archived                         Boolean           @default(false)
+  multipack                        Boolean           @default(false)
+  imageUrl                         String?
+  handle                           String? // used for the product URL, eg /products/1
+  descriptionText                  String? // product description, just the text, no HTML
+  merchantId                       Int
+  merchant                         Merchant          @relation(fields: [merchantId], references: [id])
 
   @@unique([compliancePartnerProductId, compliancePartner, shop])
   @@unique([shop, platformProductId, platformVariantId])
   @@index([merchantId])
+  @@index([platformVariantId])
 }
 
 enum WeightUnit {
@@ -199,44 +212,49 @@ model Customer {
 }
 
 model Order {
-  id                       Int               @id @default(autoincrement())
-  createdAt                DateTime          @default(now())
-  updatedAt                DateTime          @updatedAt
-  compliancePartner        CompliancePartner
-  compliancePartnerOrderId String?
-  platform                 String            @default("shopify")
-  platformOrderId          String?
-  platformOrderName        String?
-  createdWith              OrderCreatedWith
-  status                   OrderStatus
-  issues                   String[]          @default([]) // once these are added to an order never wipe them if order status changes - this is for record keeping
-  totalValue               Float             @default(0)
-  totalTax                 Float             @default(0)
-  totalShipping            Float             @default(0)
-  totalDiscounts           Float             @default(0)
-  totalComplianceFees      Float             @default(0)
-  quantityItems            Int               @default(0)
-  purchasedItems           Json              @default("[]")
-  shippingAddress          Json?
-  billingAddress           Json?
-  upsPickupId              String? // the UPS Store Pickup ID if applicable
-  phone                    String?
-  customerFirstName        String? // could be different for different orders
-  customerLastName         String? // could be different for different orders
-  customerEmail            String?
-  shippingMethod           String?
-  shippingZip              String?
-  shippingState            String? // 2 letter state code
-  transactionMonth         String? // digit month as string, eg 0 is Jan, 6 or 11 is Dec
-  transactionYear          String? // 4 digit year as string
-  platformProductIds       String[]          @default([])
-  updatedCount             Int               @default(0)
-  processingLog            Json? // structured array of { ts, event, detail } entries from order processing
-  customerId               Int
-  customer                 Customer          @relation(fields: [customerId], references: [id])
-  merchantId               Int
-  merchant                 Merchant          @relation(fields: [merchantId], references: [id])
-  Fulfillment              Fulfillment[]
+  id                                 Int               @id @default(autoincrement())
+  createdAt                          DateTime          @default(now())
+  updatedAt                          DateTime          @updatedAt
+  compliancePartner                  CompliancePartner
+  compliancePartnerOrderId           String? // SC: SalesOrderKey; VS: order id
+  compliancePartnerCommitPayloadHash String? // SC-only: hash of last committed payload, detects material changes on noisy orders/updated
+  isPickup                           Boolean           @default(false) // SC commit sets; SC fulfillment cron skips
+  compliancePartnerLastPolledAt      DateTime? // SC-only: last fulfillment poll attempt (set regardless of outcome)
+  platform                           String            @default("shopify")
+  platformOrderId                    String?
+  platformOrderName                  String?
+  createdWith                        OrderCreatedWith
+  status                             OrderStatus
+  issues                             String[]          @default([]) // once these are added to an order never wipe them if order status changes - this is for record keeping
+  totalValue                         Float             @default(0)
+  totalTax                           Float             @default(0)
+  totalShipping                      Float             @default(0)
+  totalDiscounts                     Float             @default(0)
+  totalComplianceFees                Float             @default(0)
+  quantityItems                      Int               @default(0)
+  purchasedItems                     Json              @default("[]")
+  shippingAddress                    Json?
+  billingAddress                     Json?
+  upsPickupId                        String? // the UPS Store Pickup ID if applicable
+  phone                              String?
+  customerFirstName                  String? // could be different for different orders
+  customerLastName                   String? // could be different for different orders
+  customerEmail                      String?
+  shippingMethod                     String?
+  shippingZip                        String?
+  shippingState                      String? // 2 letter state code
+  transactionMonth                   String? // digit month as string, eg 0 is Jan, 6 or 11 is Dec
+  transactionYear                    String? // 4 digit year as string
+  platformProductIds                 String[]          @default([])
+  updatedCount                       Int               @default(0)
+  processingLog                      Json? // structured array of { ts, event, detail } entries from order processing
+  customerId                         Int
+  customer                           Customer          @relation(fields: [customerId], references: [id])
+  merchantId                         Int
+  merchant                           Merchant          @relation(fields: [merchantId], references: [id])
+  Fulfillment                        Fulfillment[]
+
+  @@index([compliancePartner, compliancePartnerLastPolledAt]) // supports SC fulfillment-polling cron rotation
 }
 
 /// Captures every incoming order webhook before any business logic runs.
@@ -328,7 +346,7 @@ model ComplianceProduct {
   merchant            Merchant          @relation(fields: [merchantId], references: [id])
 
   @@unique([shop, platformProductId, platformVariantId])
-  @@index([merchantId])
+  @@index([merchantId, stateUSA])
 }
 
 // This is a config for the merchant to set the shipping state config
@@ -371,6 +389,23 @@ model MerchantBulkOperation {
 
 enum BulkOperationType {
   PRODUCT
+}
+
+/// Summary row written per ShipCompliant product-sync run (single or bulk).
+/// Separate from MerchantBulkOperation, which tracks Shopify-side bulk operation IDs.
+model ShipCompliantSyncJob {
+  id             String    @id @default(cuid())
+  createdAt      DateTime  @default(now())
+  completedAt    DateTime?
+  merchantId     Int
+  merchant       Merchant  @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  kind           String // "product_sync_bulk" | "product_sync_single"
+  total          Int       @default(0)
+  succeeded      Int       @default(0)
+  failed         Int       @default(0)
+  failureReasons Json?
+
+  @@index([merchantId, createdAt])
 }
 
 model AdminUser {
@@ -523,6 +558,7 @@ enum CompliancePartnerConnection {
 enum CompliancePartner {
   SELF
   VINOSHIPPER
+  SHIPCOMPLIANT
   UNKNOWN // for use when a merchant may be using a different app than the main compliance app
 }
 
