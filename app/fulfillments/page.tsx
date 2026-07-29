@@ -24,7 +24,8 @@ const OrderActions = ({ orderId }: { orderId: number }) => (
   <ButtonLink href={`/orders/${orderId}`}>View Order</ButtonLink>
 );
 
-export default async function Page({ searchParams }: { searchParams: PageSearchParams }) {
+export default async function Page(props: { searchParams: Promise<PageSearchParams> }) {
+  const searchParams = await props.searchParams;
   const { page, status } = searchParams;
 
   const where = status ? { status: status as FulfillmentStatus } : {};

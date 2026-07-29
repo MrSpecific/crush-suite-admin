@@ -12,7 +12,8 @@ const ClubActions = ({ id, merchantId }: { id: string; merchantId: number }) => 
   <ButtonLink href={`/clubs/merchants/${merchantId}/clubs/${id}`}>View</ButtonLink>
 );
 
-export default async function Page({ params }: { params: { merchantId: string } }) {
+export default async function Page(props: { params: Promise<{ merchantId: string }> }) {
+  const params = await props.params;
   const merchantId = parseInt(params.merchantId);
 
   if (isNaN(merchantId)) return <NotFound message="Merchant not found" />;

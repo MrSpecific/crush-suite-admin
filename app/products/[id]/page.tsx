@@ -10,7 +10,8 @@ import {
 import { ProductCategoryBadge } from '@/app/components/ProductCategoryBadge';
 import { currencyFormatter, dateTimeFormatter, formatAsUrl } from '@/lib/formatters';
 
-export default async function Page({ params }: { params: { id: string } }) {
+export default async function Page(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const { id } = params;
 
   const data = await prisma.product.findUnique({

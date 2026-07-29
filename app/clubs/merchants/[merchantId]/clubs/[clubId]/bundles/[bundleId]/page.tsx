@@ -21,13 +21,14 @@ const subscriptionStatusColor: Record<string, RadixColor> = {
   CANCELLED: 'gray',
 };
 
-export default async function Page({
-  params,
-  searchParams,
-}: {
-  params: { merchantId: string; clubId: string; bundleId: string };
-  searchParams: PageSearchParams;
-}) {
+export default async function Page(
+  props: {
+    params: Promise<{ merchantId: string; clubId: string; bundleId: string }>;
+    searchParams: Promise<PageSearchParams>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  const params = await props.params;
   const merchantId = parseInt(params.merchantId);
   const { clubId, bundleId } = params;
   const { page } = searchParams;

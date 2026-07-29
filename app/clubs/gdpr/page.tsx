@@ -14,7 +14,8 @@ const requestTypeLabels: Record<string, string> = {
   'shop-redact': 'Shop Redact',
 };
 
-export default async function Page({ searchParams }: { searchParams: PageSearchParams }) {
+export default async function Page(props: { searchParams: Promise<PageSearchParams> }) {
+  const searchParams = await props.searchParams;
   const { page, status } = searchParams;
   const completedFilter =
     status === 'pending' ? false : status === 'completed' ? true : undefined;

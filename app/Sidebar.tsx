@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState, useTransition } from 'react';
+import { useState, useTransition } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   Badge,
@@ -41,16 +41,11 @@ export const Sidebar = ({ user }: { user?: SessionUser }) => {
   const router = useRouter();
   const [pendingMode, setPendingMode] = useState<App | null>(null);
   const [isModeTransitionPending, startModeTransition] = useTransition();
-  const selectedMode = pendingMode ?? mode;
+  const effectivePendingMode = pendingMode === mode ? null : pendingMode;
+  const selectedMode = effectivePendingMode ?? mode;
   const currentAppColor = environment.appColorScheme.color;
   const selectedAppColor = environment.apps[selectedMode].color;
-  const isModeLoading = pendingMode !== null || isModeTransitionPending;
-
-  useEffect(() => {
-    if (pendingMode === mode) {
-      setPendingMode(null);
-    }
-  }, [mode, pendingMode]);
+  const isModeLoading = effectivePendingMode !== null || isModeTransitionPending;
 
   const handleModeChange = (value: string) => {
     const nextMode = value as App;
@@ -367,11 +362,13 @@ export const NavItem = ({
 }) => {
   const pathname = usePathname();
   const [loading, setLoading] = useState(false);
+  const [prevPathname, setPrevPathname] = useState(pathname);
   const active = defaultActive || pathname === href;
 
-  useEffect(() => {
+  if (pathname !== prevPathname) {
+    setPrevPathname(pathname);
     setLoading(false);
-  }, [pathname]);
+  }
 
   return (
     <ButtonLink

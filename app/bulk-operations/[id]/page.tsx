@@ -17,7 +17,8 @@ const getOperationStatus = (op: {
   return { label: 'Pending', color: 'gray' };
 };
 
-export default async function Page({ params }: { params: { id: string } }) {
+export default async function Page(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const operation = await prisma.merchantBulkOperation.findUnique({
     where: { id: params.id },
     select: {

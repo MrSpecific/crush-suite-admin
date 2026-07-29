@@ -1,3 +1,5 @@
+'use client';
+
 import { Button, Dialog, Flex } from '@radix-ui/themes';
 import { useActionState } from 'react';
 import { useFormStatus } from 'react-dom';

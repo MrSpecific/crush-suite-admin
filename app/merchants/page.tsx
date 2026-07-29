@@ -63,7 +63,8 @@ const Actions = ({ ...props }) => {
   );
 };
 
-export default async function Page({ searchParams }: { searchParams: PageSearchParams }) {
+export default async function Page(props: { searchParams: Promise<PageSearchParams> }) {
+  const searchParams = await props.searchParams;
   const { page, search, status, billingPlanId, connection, sort } = searchParams;
   const searchString = search?.toString();
   const statusFilter = normalizeMerchantStatus(status);

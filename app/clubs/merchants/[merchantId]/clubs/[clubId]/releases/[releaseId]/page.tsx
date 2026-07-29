@@ -17,11 +17,12 @@ const productKindColor: Record<string, RadixColor> = {
   optional: 'gray',
 };
 
-export default async function Page({
-  params,
-}: {
-  params: { merchantId: string; clubId: string; releaseId: string };
-}) {
+export default async function Page(
+  props: {
+    params: Promise<{ merchantId: string; clubId: string; releaseId: string }>;
+  }
+) {
+  const params = await props.params;
   const merchantId = parseInt(params.merchantId);
   const { clubId, releaseId } = params;
 

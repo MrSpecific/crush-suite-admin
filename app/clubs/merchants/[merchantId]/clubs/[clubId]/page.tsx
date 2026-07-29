@@ -20,11 +20,12 @@ const membershipStatusColor: Record<string, RadixColor> = {
   PENDING_MIGRATION: 'orange',
 };
 
-export default async function Page({
-  params,
-}: {
-  params: { merchantId: string; clubId: string };
-}) {
+export default async function Page(
+  props: {
+    params: Promise<{ merchantId: string; clubId: string }>;
+  }
+) {
+  const params = await props.params;
   const merchantId = parseInt(params.merchantId);
   const { clubId } = params;
 
@@ -222,7 +223,6 @@ export default async function Page({
           </Card>
         </Box>
       </Grid>
-
       {club.description && (
         <Card mb="4">
           <Heading size="3" mb="2">
@@ -233,7 +233,6 @@ export default async function Page({
           </Text>
         </Card>
       )}
-
       <Box mb="6">
         <Heading size="4" mb="3">
           Recent Releases
@@ -246,7 +245,6 @@ export default async function Page({
           </Text>
         )}
       </Box>
-
       {isBundleClub && (
         <Card mb="4">
           <Heading size="3" mb="3">
@@ -262,7 +260,6 @@ export default async function Page({
           />
         </Card>
       )}
-
       {isBundleClub && (
         <Box>
           <Heading size="4" mb="3">

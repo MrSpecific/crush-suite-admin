@@ -19,13 +19,14 @@ import {
   noNullsFormatter,
 } from '@/lib/formatters';
 
-export default async function Page({
-  params,
-  searchParams,
-}: {
-  params: { id: string };
-  searchParams: PageSearchParams;
-}) {
+export default async function Page(
+  props: {
+    params: Promise<{ id: string }>;
+    searchParams: Promise<PageSearchParams>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  const params = await props.params;
   const { id } = params;
   const { page, search } = searchParams;
   const where = {

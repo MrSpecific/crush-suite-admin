@@ -5,7 +5,8 @@ import { OrderTableActions, getOrderTableHeaders } from '@/app/orders/orderTable
 import { prisma } from '@/lib/prisma';
 import { queryPagination } from '@/lib/queryPagination';
 
-export default async function Page({ searchParams }: { searchParams: PageSearchParams }) {
+export default async function Page(props: { searchParams: Promise<PageSearchParams> }) {
+  const searchParams = await props.searchParams;
   const { page } = searchParams;
 
   const count = await prisma.order.count();

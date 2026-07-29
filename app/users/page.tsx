@@ -18,11 +18,12 @@ const Actions = ({ ...props }) => {
   );
 };
 
-export default async function Page({
-  searchParams,
-}: {
-  searchParams: { [key: string]: string | string[] | undefined };
-}) {
+export default async function Page(
+  props: {
+    searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const { page } = searchParams;
   const count = await prisma.adminUser.count();
   const data = await prisma.adminUser.findMany({

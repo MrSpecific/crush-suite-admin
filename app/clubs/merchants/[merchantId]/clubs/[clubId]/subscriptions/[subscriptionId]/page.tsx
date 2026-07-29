@@ -55,13 +55,14 @@ const titleCase = (value: string) =>
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(' ');
 
-export default async function Page({
-  params,
-  searchParams,
-}: {
-  params: { merchantId: string; clubId: string; subscriptionId: string };
-  searchParams: PageSearchParams;
-}) {
+export default async function Page(
+  props: {
+    params: Promise<{ merchantId: string; clubId: string; subscriptionId: string }>;
+    searchParams: Promise<PageSearchParams>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  const params = await props.params;
   const merchantId = parseInt(params.merchantId);
   const { clubId, subscriptionId } = params;
   const { page } = searchParams;

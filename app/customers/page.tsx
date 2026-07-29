@@ -18,7 +18,8 @@ const Actions = ({ ...props }) => {
   );
 };
 
-export default async function Page({ searchParams }: { searchParams: PageSearchParams }) {
+export default async function Page(props0: { searchParams: Promise<PageSearchParams> }) {
+  const searchParams = await props0.searchParams;
   const { page, search } = searchParams;
   const searchString = search?.toString();
   const where = search

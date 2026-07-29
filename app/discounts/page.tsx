@@ -15,7 +15,8 @@ import { ButtonLink } from '@/app/components/ButtonLink';
 import { Link } from '@/app/components/Link';
 import { truncate } from 'fs';
 
-export default async function Page({ searchParams }: { searchParams: PageSearchParams }) {
+export default async function Page(props: { searchParams: Promise<PageSearchParams> }) {
+  const searchParams = await props.searchParams;
   const { page, search } = searchParams;
   const searchString = search?.toString();
   // const where = search

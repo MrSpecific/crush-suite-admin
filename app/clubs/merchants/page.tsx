@@ -14,7 +14,8 @@ const Actions = ({ id }: { id: number }) => (
   <ButtonLink href={`/clubs/merchants/${id}`}>View</ButtonLink>
 );
 
-export default async function Page({ searchParams }: { searchParams: PageSearchParams }) {
+export default async function Page(props: { searchParams: Promise<PageSearchParams> }) {
+  const searchParams = await props.searchParams;
   const { page, search } = searchParams;
   const searchString = search?.toString();
   const where = getMerchantWhere(searchString);

@@ -12,7 +12,8 @@ const MerchantActions = ({ id }: { id: number }) => (
   <ButtonLink href={`/clubs/merchants/${id}`}>View</ButtonLink>
 );
 
-export default async function Page({ params }: { params: { id: string } }) {
+export default async function Page(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const planId = parseInt(params.id);
   if (isNaN(planId)) return <NotFound message="Billing plan not found" />;
 

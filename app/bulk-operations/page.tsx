@@ -25,7 +25,8 @@ const Actions = ({ id }: { id: string }) => (
   <ButtonLink href={`/bulk-operations/${id}`}>View</ButtonLink>
 );
 
-export default async function Page({ searchParams }: { searchParams: PageSearchParams }) {
+export default async function Page(props: { searchParams: Promise<PageSearchParams> }) {
+  const searchParams = await props.searchParams;
   const { page, type } = searchParams;
 
   const where = type ? { type: type as BulkOperationType } : {};

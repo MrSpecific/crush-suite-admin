@@ -19,7 +19,8 @@ const statusMeta: Record<string, { label: string; color: 'blue' | 'green' | 'red
 const OrderActions = ({ orderId }: { orderId: number | null }) =>
   orderId ? <ButtonLink href={`/orders/${orderId}`}>View Order</ButtonLink> : null;
 
-export default async function Page({ searchParams }: { searchParams: PageSearchParams }) {
+export default async function Page(props: { searchParams: Promise<PageSearchParams> }) {
+  const searchParams = await props.searchParams;
   const { page, status, search } = searchParams;
   const searchString = search?.toString();
   const statusString = status?.toString();

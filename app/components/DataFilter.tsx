@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useId, useState } from 'react';
+import { useId, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Box, Button, Flex, IconButton, Select, Text, TextField } from '@radix-ui/themes';
 import * as Form from '@radix-ui/react-form';
@@ -28,11 +28,13 @@ export const DataFilter = ({ filters = [] }: { filters?: SelectDataFilter[] }) =
   const currentSearch = params.get('search') || '';
   const searchInputId = useId();
   const [searchValue, setSearchValue] = useState(currentSearch);
+  const [prevSearch, setPrevSearch] = useState(currentSearch);
 
   // Keep the input in sync when the URL search param changes (e.g. browser nav).
-  useEffect(() => {
+  if (currentSearch !== prevSearch) {
+    setPrevSearch(currentSearch);
     setSearchValue(currentSearch);
-  }, [currentSearch]);
+  }
 
   const buildUrl = (params: URLSearchParams) => {
     const query = params.toString();

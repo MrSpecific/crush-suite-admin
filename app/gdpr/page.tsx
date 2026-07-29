@@ -14,7 +14,8 @@ import { Badge, Box, Flex, Text } from '@radix-ui/themes';
 import { ButtonLink, ButtonLinkSpinner } from '@/app/components/ButtonLink';
 import { Link } from '@/app/components/Link';
 
-export default async function Page({ searchParams }: { searchParams: PageSearchParams }) {
+export default async function Page(props: { searchParams: Promise<PageSearchParams> }) {
+  const searchParams = await props.searchParams;
   const { page, search } = searchParams;
   const searchString = search?.toString();
   const count = await prisma.gDPR.count();

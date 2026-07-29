@@ -99,6 +99,10 @@ export const merchantEmailTypeMetaData: Record<MerchantEmailType, EnumMetaData> 
   CUSTOMIZATION_CLOSED: { label: 'Customization Closed', color: 'gray' },
   RELEASE_CLOSING: { label: 'Release Closing', color: 'orange' },
   RELEASE_SUMMARY: { label: 'Release Summary', color: 'purple' },
+  MEMBER_JOINED: { label: 'Member Joined', color: 'green' },
+  MEMBER_CANCELLED: { label: 'Member Cancelled', color: 'gray' },
+  PAYMENT_FAILED_ALERT: { label: 'Payment Failed Alert', color: 'red' },
+  RECONNECT_STORE: { label: 'Reconnect Store', color: 'orange' },
 };
 
 export const clubsMerchantStatusMetaData: Record<ClubsMerchantStatus, EnumMetaData> = {

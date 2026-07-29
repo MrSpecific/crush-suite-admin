@@ -13,11 +13,12 @@ const Actions = ({ ...props }) => {
   return <ButtonLink href={`/billing-plans/${props.id}/edit`}>Edit</ButtonLink>;
 };
 
-export default async function Page({
-  searchParams,
-}: {
-  searchParams: { [key: string]: string | string[] | undefined };
-}) {
+export default async function Page(
+  props: {
+    searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const { page } = searchParams;
   const count = await prisma.billingPlan.count();
   const data = await prisma.billingPlan.findMany({

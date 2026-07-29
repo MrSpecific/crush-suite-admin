@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Button, type ButtonProps, IconButton, type IconButtonProps } from '@radix-ui/themes';
@@ -23,10 +23,12 @@ export const ButtonLinkSpinner = ({
 }: { href: string; children: React.ReactNode } & ButtonProps) => {
   const [loading, setLoading] = useState(false);
   const pathname = usePathname();
+  const [prevPathname, setPrevPathname] = useState(pathname);
 
-  useEffect(() => {
+  if (pathname !== prevPathname) {
+    setPrevPathname(pathname);
     setLoading(false);
-  }, [pathname]);
+  }
 
   return (
     <Button {...props} asChild={!loading} onClick={() => setLoading(true)} loading={loading}>

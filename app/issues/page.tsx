@@ -15,7 +15,8 @@ const MerchantActions = ({ merchantId }: { merchantId: number }) => (
   <ButtonLink href={`/merchants/${merchantId}`}>View Merchant</ButtonLink>
 );
 
-export default async function Page({ searchParams }: { searchParams: PageSearchParams }) {
+export default async function Page(props: { searchParams: Promise<PageSearchParams> }) {
+  const searchParams = await props.searchParams;
   const { page, issueType, resolved } = searchParams;
 
   const where = {

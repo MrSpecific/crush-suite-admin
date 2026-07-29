@@ -10,7 +10,8 @@ const Actions = ({ id, merchantId }: { id: string; merchantId: number }) => (
   <ButtonLink href={`/clubs/merchants/${merchantId}/clubs/${id}`}>View</ButtonLink>
 );
 
-export default async function Page({ searchParams }: { searchParams: PageSearchParams }) {
+export default async function Page(props: { searchParams: Promise<PageSearchParams> }) {
+  const searchParams = await props.searchParams;
   const { page } = searchParams;
   const count = await prismaClubs.club.count();
   const clubs = await prismaClubs.club.findMany({

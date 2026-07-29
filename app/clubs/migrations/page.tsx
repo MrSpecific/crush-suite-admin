@@ -24,7 +24,8 @@ const Actions = ({ id }: { id: string }) => (
   <ButtonLink href={`/clubs/migrations/${id}`}>View</ButtonLink>
 );
 
-export default async function Page({ searchParams }: { searchParams: PageSearchParams }) {
+export default async function Page(props: { searchParams: Promise<PageSearchParams> }) {
+  const searchParams = await props.searchParams;
   const { page } = searchParams;
   const count = await prismaClubs.clubMigration.count();
   const migrations = await prismaClubs.clubMigration.findMany({
