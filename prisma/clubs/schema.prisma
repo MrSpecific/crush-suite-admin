@@ -13,6 +13,10 @@ model Merchant {
   updatedAt             DateTime               @updatedAt
   shop                  String                 @unique
   status                Status
+  // Set true when the worker detects this merchant's offline refresh-token
+  // chain is dead (re-auth required). Cleared by the app on next successful
+  // authenticate.admin(). See documentation/expiring-offline-tokens.md (§4.5).
+  needsReauth           Boolean                @default(false)
   platformEmail         String?
   platformShopId        String? // Shopify shop ID (degidified, e.g., "12345"); needed for Partner API activeSubscription
   platformShopName      String? // without the .myshopify.com
@@ -105,21 +109,25 @@ model GDPR {
 
 // Club models go here
 model AppSession {
-  id            String    @id
-  shop          String
-  state         String
-  isOnline      Boolean   @default(false)
-  scope         String?
-  expires       DateTime?
-  accessToken   String
-  userId        BigInt?
-  firstName     String?
-  lastName      String?
-  email         String?
-  accountOwner  Boolean   @default(false)
-  locale        String?
-  collaborator  Boolean?  @default(false)
-  emailVerified Boolean?  @default(false)
+  id                  String    @id
+  shop                String
+  state               String
+  isOnline            Boolean   @default(false)
+  scope               String?
+  expires             DateTime?
+  accessToken         String
+  // Expiring offline access tokens (Shopify deprecation): refresh-token rotation.
+  // Null for legacy non-expiring tokens. See documentation/expiring-offline-tokens.md
+  refreshToken        String?
+  refreshTokenExpires DateTime?
+  userId              BigInt?
+  firstName           String?
+  lastName            String?
+  email               String?
+  accountOwner        Boolean   @default(false)
+  locale              String?
+  collaborator        Boolean?  @default(false)
+  emailVerified       Boolean?  @default(false)
 }
 
 model AppBillingPlan {
@@ -221,8 +229,10 @@ model Release {
   inventoryAllocationDate           DateTime // when inventory should be allocated for this release
   shippingHoldDate                  DateTime? // when shipping should be held until - only relevant for CrushSuite compliance integration. we can decorate all contract orders with this data
   inventoryReserved                 Boolean                       @default(false)
+  inventoryReservedAt               DateTime? // when the CRON default reserve first completed (paired with inventoryReserved)
   inventoryReservedForMemberCount   Int                           @default(0) // member count used for the last default inventory reserve — used to compute deltas
   inventoryUnreserved               Boolean                       @default(false) // tracks pre-billing unreserve completion
+  inventoryUnreservedAt             DateTime? // when the pre-billing/archival unreserve completed (paired with inventoryUnreserved)
   inventoryError                    String? // surfaced to merchant when unreserve fails and billing proceeds with ALLOW_OVERSELLING
   releaseOrdersProcessLockId        String? // to prevent concurrent processing of release orders
   billingAttemptsProcessLockId      String? // to prevent concurrent processing of billing attempts
@@ -232,11 +242,27 @@ model Release {
   contractsGeneratedAt              DateTime? // when the contracts were generated for this release
   attemptedFirstBillingAt           DateTime? // when we first attempted to bill customers for this release for all release orders
   releaseDate                       DateTime // when the orders should be created
-  defaultPlatformShippingMethodId   String? // the default shipping rate ID to use for this release
-  defaultPlatformShippingMethodName String? // the default shipping rate name to use for this release
+  // REDUNDANT: today holds a copy of ...Name (a delivery-profile method NAME), NOT a real
+  // Shopify method-definition id — the form writes the same value to both. Nothing reads it
+  // meaningfully. Revisit if we ever need the true methodDefinition GID.
+  defaultPlatformShippingMethodId   String?
+  // Merchant-chosen DEFAULT shipping method as a delivery-profile method NAME (e.g. "Standard",
+  // "Express", "Economy") — NOT a carrier rate code. Config value + seed for the requested rate at
+  // order time; matched against a resolved rate's TITLE (with code as fallback). Carrier-source
+  // methods like "Vinoshipper" cannot be pinned this way — see the doc.
+  // See documentation/releases/shipping-rate-identity.md
+  defaultPlatformShippingMethodName String?
   deliveryMethods                   DeliveryMethod[]              @default([SHIPPING])
-  enabledShippingMethods            String[]                      @default([]) // list of enabled shipping method rate names
-  shippingFlatRate                  Float? // if set, this flat rate will be used for shipping instead of the calculated rate and applied to the default method
+  // Allowed shipping method NAMES (same delivery-profile name-space as
+  // defaultPlatformShippingMethodName, e.g. "Standard"). Used as a match filter for a member's
+  // preferred rate. See documentation/releases/shipping-rate-identity.md
+  enabledShippingMethods            String[]                      @default([])
+  // Decoupled, FINAL flat shipping PRICE for the release. When set, it overrides the
+  // calculated cost on ANY resolved SHIPPING order (not tied to the default method) and
+  // shipping discounts do NOT further reduce it. Still needs a rate to resolve (for the
+  // contract's shippingOption code/title); SHIPPING-only; 0 = free shipping. Applied via
+  // resolveShippingCharge. See documentation/releases/shipping-rate-identity.md
+  shippingFlatRate                  Float?
   allowUPSAccessPointPickup         Boolean                       @default(false) // only available to merchant who have CrushSuite compliance integration. This gets registered as a shipping method on the order
   onlyCheapestShippingRate          Boolean                       @default(true) // when true, only the cheapest non-AP shipping rate is shown to customers (plus AP rates if allowed)
   minOrderQuantity                  Int                           @default(1)
@@ -309,11 +335,10 @@ model ReleaseDiscount {
   name        String
   description String?
 
-  scope                DiscountScope // PRODUCT | SHIPPING
-  condition            DiscountCondition // QUANTITY | SUBTOTAL - quantity overules subtotal - we should prevent having both in the UI
-  enabledShippingRates String[]          @default([]) // if scope is SHIPPING, which shipping rates does this discount apply to
-  minQuantity          Int?
-  minSubtotal          Float?
+  scope       DiscountScope // PRODUCT | SHIPPING
+  condition   DiscountCondition // QUANTITY | SUBTOTAL - quantity overules subtotal - we should prevent having both in the UI
+  minQuantity Int?
+  minSubtotal Float?
 
   valueType       DiscountValueType // PERCENT | FIXED
   discountPercent Float?
@@ -398,8 +423,14 @@ model ReleaseOrder {
   deliveryLocalDeliveryCode         String? // eg the code to identify the local delivery
   deliveryLocalDeliveryInstructions String? // special instructions for local delivery
   // Shipping specific fields
-  shippingRate                      String? // the shipping rate code (e.g., "03:U61302558" for UPS Access Point, "Vinoshipper" for standard)
-  shippingRateTitle                 String? // the display title of the shipping rate (e.g., "📦 UPS Pickup: 3519 NE 15TH AVE")
+  // Resolved rate CODE (e.g. "03:U61302558") → subscription contract shippingOption.code.
+  // Contract-critical, not display. Historically has also held rate TITLES/method NAMES (the
+  // requested value is preserved before the resolved code), so legacy rows are mixed. For PICKUP
+  // this column is reused to store the pickup location title. See documentation/releases/shipping-rate-identity.md
+  shippingRate                      String?
+  // Resolved rate TITLE (e.g. "UPS Ground") → subscription contract shippingOption.title.
+  // Display + contract-critical (Shopify requires it non-blank). See documentation/releases/shipping-rate-identity.md
+  shippingRateTitle                 String?
   platformPaymentMethodId           String? // eg the payment method ID in Shopify
   complianceFee                     Json? // compliance fee object {[variantId: number]: quantity}
   complianceFeeCost                 Float                          @default(0)
@@ -419,8 +450,21 @@ model ReleaseOrder {
   clubCustomerId                    String
   clubCustomer                      ClubCustomer                   @relation(fields: [clubCustomerId], references: [id], onDelete: Cascade)
   orderProcessingRecords            ReleaseOrderProcessingRecord[]
+  /**
+   * Timestamp of when the order was first surfaced in Highlighted Issues.
+   */
+  highlightedIssuesListedAt         DateTime?
+  /**
+   * Merchant-controlled triage in Highlighted Issues (defaults OPEN).
+   */
+  highlightedIssueMerchantState     HighlightedIssueMerchantState  @default(OPEN)
 
   @@unique([releaseId, platformCustomerId])
+}
+
+enum HighlightedIssueMerchantState {
+  OPEN
+  RESOLVED
 }
 
 enum DeliveryMethod {
@@ -485,6 +529,14 @@ model Membership {
   updatedAt                          DateTime                  @updatedAt
   platformContractId                 String? // eg the subscription contract ID in Shopify
   platformPaymentMethodId            String? // eg the payment method ID in Shopify
+  // Cached card-expiry data for the CARD_EXPIRING_SOON email, so the daily cron
+  // can pre-filter in SQL instead of querying Shopify for every active member.
+  // Always describes the current `platformPaymentMethodId`: populated/verified
+  // lazily by the cron and invalidated (cleared) when the payment method changes
+  // or is revoked. `cardExpiresAt` is the end of the card's expiry month;
+  // `cardCheckedAt` is the last Shopify verification.
+  cardExpiresAt                      DateTime?
+  cardCheckedAt                      DateTime?
   email                              String?
   phoneNumber                        String?
   shippingAddress                    Json?
@@ -579,6 +631,12 @@ enum MembershipEventType {
   REJOINED
   SKIPPED_RELEASE
   UNSKIPPED_RELEASE
+  CUSTOMIZED
+  ORDER_PLACED
+  ADDRESS_CHANGED
+  PAYMENT_METHOD_CHANGED
+  MEMBERSHIP_BILLED
+  BILLING_FAILED
 }
 
 // ─── Bundle Subscription ──────────────────────────────────────────
@@ -1007,6 +1065,15 @@ enum MerchantEmailType {
   CUSTOMIZATION_CLOSED
   RELEASE_CLOSING
   RELEASE_SUMMARY
+  MEMBER_JOINED
+  MEMBER_CANCELLED
+  PAYMENT_FAILED_ALERT
+  RECONNECT_STORE
+}
+
+enum AfterMaxRetriesAction {
+  PAUSE
+  CANCEL
 }
 
 // ─── Customer Email ─────────────────────────────────────────────────
@@ -1020,9 +1087,12 @@ enum CustomerEmailType {
   CUSTOMIZATION_REMINDER_72HR
   CUSTOMIZATION_REMINDER_24HR
   CUSTOMIZATION_CONFIRMED
+  ORDER_PROCESSING_NOTICE
   PAYMENT_SUCCESSFUL
   PAYMENT_FAILED
   CHECKOUT_REQUIRED
+  CARD_EXPIRING_SOON
+  POS_ADD_PAYMENT
 }
 
 model CustomerEmailLog {
@@ -1040,6 +1110,8 @@ model CustomerEmailLog {
   @@index([shop])
 }
 
+// ─── Merchant Settings ──────────────────────────────────────────────
+
 model MerchantEmailSettings {
   id             Int      @id @default(autoincrement())
   createdAt      DateTime @default(now())
@@ -1051,6 +1123,27 @@ model MerchantEmailSettings {
   primaryColor   String?
   secondaryColor String?
   supportEmail   String?
+  footerText     String?
+
+  maxRetryAttempts      Int                   @default(3)
+  retryIntervalDays     Int                   @default(3)
+  afterMaxRetriesAction AfterMaxRetriesAction @default(PAUSE)
+
+  customizationReminderDays    Int     @default(7)
+  customizationReminderEnabled Boolean @default(true)
+  finalReminderDays            Int     @default(2)
+  finalReminderEnabled         Boolean @default(true)
+  cardExpiringDays             Int     @default(30)
+  cardExpiringEnabled          Boolean @default(true)
+
+  alertNewMember    Boolean @default(true)
+  alertMemberCancel Boolean @default(true)
+  alertPaymentFail  Boolean @default(true)
+  alertReleaseShips Boolean @default(false)
+
+  defaultShippingMethodCode String?
+  defaultFlatRate           Decimal? @db.Decimal(10, 2)
+  defaultFlatRateEnabled    Boolean  @default(false)
 }
 
 // ─── Club Migration ────────────────────────────────────────────────
