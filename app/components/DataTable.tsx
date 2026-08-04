@@ -27,9 +27,9 @@ export const DataTable = ({ headers, data, Actions }: DataTableProps) => {
       <Table.Root variant="surface" mb="4">
         <Table.Header style={{ position: 'sticky', top: 0 }}>
           <Table.Row>
-            {headers.map((header) => (
+            {headers.map((header, i) => (
               <Table.ColumnHeaderCell
-                key={header.id}
+                key={header.id ?? `${header.title}-${i}`}
                 minWidth="max-content"
                 style={{ whiteSpace: 'nowrap' }}
               >
@@ -45,8 +45,8 @@ export const DataTable = ({ headers, data, Actions }: DataTableProps) => {
                 <DataDialog title="Data" data={row} />
               </Table.Cell> */}
 
-              {headers.map((header) => {
-                const key = `${header.id}-${i}`;
+              {headers.map((header, headerIndex) => {
+                const key = `${header.id ?? headerIndex}-${i}`;
                 if (header.type === 'data')
                   return (
                     <Table.Cell key={key} align="center">

@@ -10,9 +10,9 @@ import {
   Grid,
   Heading,
   ScrollArea,
-  Select,
   Separator,
   Spinner,
+  Text,
   VisuallyHidden,
 } from '@radix-ui/themes';
 import { UserCard } from './UserCard';
@@ -34,6 +34,8 @@ const modeRoots: Record<App, string> = {
   seats: '/seats',
 };
 
+const appOrder: App[] = ['compliance', 'clubs', 'seats'];
+
 export const Sidebar = ({ user }: { user?: SessionUser }) => {
   const pathname = usePathname();
   const mode = getModeFromPathname(pathname);
@@ -44,7 +46,6 @@ export const Sidebar = ({ user }: { user?: SessionUser }) => {
   const effectivePendingMode = pendingMode === mode ? null : pendingMode;
   const selectedMode = effectivePendingMode ?? mode;
   const currentAppColor = environment.appColorScheme.color;
-  const selectedAppColor = environment.apps[selectedMode].color;
   const isModeLoading = effectivePendingMode !== null || isModeTransitionPending;
 
   const handleModeChange = (value: string) => {
@@ -103,24 +104,43 @@ export const Sidebar = ({ user }: { user?: SessionUser }) => {
           </Box>
           <VisuallyHidden>Crush Suite Admin</VisuallyHidden>
         </Heading>
-        <Select.Root
-          size="1"
-          value={selectedMode}
-          onValueChange={handleModeChange}
-          disabled={isModeLoading}
-        >
-          <Select.Trigger color={selectedAppColor} style={{ width: '100%' }} mb="3">
-            <Flex align="center" gap="2">
-              {isModeLoading && <Spinner size="1" />}
-              <span>{environment.apps[selectedMode].label}</span>
-            </Flex>
-          </Select.Trigger>
-          <Select.Content>
-            <Select.Item value="compliance">Compliance</Select.Item>
-            <Select.Item value="clubs">Clubs</Select.Item>
-            <Select.Item value="seats">Seats</Select.Item>
-          </Select.Content>
-        </Select.Root>
+        <Grid columns="1" gap="1" mb="3">
+          {appOrder.map((app) => {
+            const isSelected = selectedMode === app;
+            const isPending = isModeLoading && pendingMode === app;
+
+            return (
+              <Button
+                key={app}
+                size="2"
+                variant={isSelected ? 'solid' : 'soft'}
+                color={isSelected ? environment.apps[app].color : 'gray'}
+                disabled={isModeLoading}
+                onClick={() => handleModeChange(app)}
+                style={{ width: '100%', justifyContent: 'flex-start' }}
+              >
+                <Flex align="center" gap="2" width="100%">
+                  {isPending ? (
+                    <Spinner size="1" />
+                  ) : (
+                    <Box
+                      width="8px"
+                      height="8px"
+                      flexShrink="0"
+                      style={{
+                        borderRadius: '50%',
+                        backgroundColor: isSelected
+                          ? 'currentColor'
+                          : `var(--${environment.apps[app].color}-9)`,
+                      }}
+                    />
+                  )}
+                  <Text>{environment.apps[app].label}</Text>
+                </Flex>
+              </Button>
+            );
+          })}
+        </Grid>
       </Box>
 
       <ScrollArea>
