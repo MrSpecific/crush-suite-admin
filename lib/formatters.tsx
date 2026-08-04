@@ -43,6 +43,10 @@ export const linkToMerchantFormatter = (value: any, row: any) => (
   <Link href={`/merchants/${row.merchantId || row.id}`}>{value}</Link>
 );
 
+export const linkToClubMerchantFormatter = (value: any, row: any) => (
+  <Link href={`/clubs/merchants/${row.merchantId || row.id}`}>{value}</Link>
+);
+
 export const linkToProductFormatter = (value: any, row: any) => (
   <Link href={`/products/${row.productId || row.id}`}>{value}</Link>
 );

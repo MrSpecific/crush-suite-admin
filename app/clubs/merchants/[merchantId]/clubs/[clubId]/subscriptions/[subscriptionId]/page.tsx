@@ -24,6 +24,7 @@ const orderStatusColor: Record<string, RadixColor> = {
   FAILED: 'red',
   SKIPPED: 'orange',
   CHALLENGED: 'purple',
+  ORDER_ID_UNRESOLVED: 'amber',
 };
 
 const orderSourceColor: Record<string, RadixColor> = {

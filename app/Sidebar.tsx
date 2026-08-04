@@ -202,6 +202,9 @@ const ClubsNav = ({ color }: { color: RadixColor }) => (
     <NavItem href="/clubs/all" color={color}>
       All Clubs
     </NavItem>
+    <NavItem href="/clubs/releases" color={color}>
+      All Releases
+    </NavItem>
     <NavItem href="/clubs/merchants" color={color}>
       Merchants
     </NavItem>
@@ -221,6 +224,12 @@ const ClubsNav = ({ color }: { color: RadixColor }) => (
     <NavItem href="/clubs/feature-flags" color={color}>
       Feature Flags
     </NavItem>
+    <Flex align="center" justify="between" gap="2">
+      <NavItem href="/clubs/logs" color={color} style={{ flexGrow: '2' }}>
+        Logs
+      </NavItem>
+      <LogsDropdown />
+    </Flex>
   </>
 );
 
@@ -259,6 +268,29 @@ const MerchantsDropdown = () => {
         <DropdownMenu.Separator />
         <DropdownMenu.Item asChild onSelect={() => setOpen(false)}>
           <Link href="/merchants?connection=ERROR">Connection Errors</Link>
+        </DropdownMenu.Item>
+      </DropdownMenu.Content>
+    </DropdownMenu.Root>
+  );
+};
+
+const LogsDropdown = () => {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <DropdownMenu.Root open={open} onOpenChange={setOpen}>
+      <DropdownMenu.Trigger>
+        <Button variant="soft" color="gray">
+          <DropdownMenu.TriggerIcon />
+        </Button>
+      </DropdownMenu.Trigger>
+
+      <DropdownMenu.Content>
+        <DropdownMenu.Item asChild onSelect={() => setOpen(false)}>
+          <Link href="/clubs/logs/usage-billing">Usage Billing</Link>
+        </DropdownMenu.Item>
+        <DropdownMenu.Item asChild onSelect={() => setOpen(false)}>
+          <Link href="/clubs/logs/reprocess">Reprocess Log</Link>
         </DropdownMenu.Item>
       </DropdownMenu.Content>
     </DropdownMenu.Root>

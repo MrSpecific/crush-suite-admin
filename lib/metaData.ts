@@ -1,7 +1,14 @@
 import { OrderStatus, ProductCategory, AppIssueType, CompliancePartnerConnection } from '@prisma/client';
 import type { RadixColor } from '@/types/radix-ui';
 import { DOMElement } from 'react';
-import type { ClubStatus, ClubType, Status as ClubsMerchantStatus, MerchantEmailType } from '../generated/prisma/clubs';
+import type {
+  ClubStatus,
+  ClubType,
+  Status as ClubsMerchantStatus,
+  MerchantEmailType,
+  UsageBillingSource,
+  UsageBillingStatus,
+} from '../generated/prisma/clubs';
 
 type EnumMetaData = {
   label: string;
@@ -103,6 +110,40 @@ export const merchantEmailTypeMetaData: Record<MerchantEmailType, EnumMetaData> 
   MEMBER_CANCELLED: { label: 'Member Cancelled', color: 'gray' },
   PAYMENT_FAILED_ALERT: { label: 'Payment Failed Alert', color: 'red' },
   RECONNECT_STORE: { label: 'Reconnect Store', color: 'orange' },
+};
+
+export const usageBillingStatusMetaData: Record<UsageBillingStatus, EnumMetaData> = {
+  PENDING: {
+    label: 'Pending',
+    color: 'gray',
+    description: 'Owed, not yet accepted by Shopify App Events',
+  },
+  ACCEPTED: {
+    label: 'Accepted',
+    color: 'green',
+    description: 'Shopify returned 202 + success:true',
+  },
+  SKIPPED: {
+    label: 'Skipped',
+    color: 'blue',
+    description: 'Correctly nothing owed ($0 order)',
+  },
+  FAILED: {
+    label: 'Failed',
+    color: 'orange',
+    description: 'Transient or credential failure — reconciliation will re-fire',
+  },
+  REJECTED: {
+    label: 'Rejected',
+    color: 'red',
+    description: 'Permanently refused — needs a human, never re-fired',
+  },
+};
+
+export const usageBillingSourceMetaData: Record<UsageBillingSource, EnumMetaData> = {
+  MEMBER: { label: 'Membership', color: 'blue' },
+  BUNDLE: { label: 'Bundle', color: 'purple' },
+  RELEASE: { label: 'Release', color: 'teal' },
 };
 
 export const clubsMerchantStatusMetaData: Record<ClubsMerchantStatus, EnumMetaData> = {

@@ -5,7 +5,11 @@ import { DataTable } from '@/app/components/DataTable';
 import { DataDialog } from '@/app/components/DataDialog';
 import { NotFound } from '@/app/components/NotFound';
 import { Badge, Box, Card, Grid, Heading, Text } from '@radix-ui/themes';
-import { dateFormatter, dateTimeFormatter } from '@/lib/formatters';
+import {
+  dateFormatter,
+  dateTimeFormatter,
+  linkToClubMerchantFormatter,
+} from '@/lib/formatters';
 import type { RadixColor } from '@/types/radix-ui';
 
 const membershipStatusColor: Record<string, RadixColor> = {
@@ -183,7 +187,7 @@ export default async function Page(props: { params: Promise<{ id: string }> }) {
       title: 'Club',
       href: (_v: string, row: any) => `/clubs/merchants/${row.merchantId}/clubs/${row.clubId}`,
     },
-    { id: 'merchantName', title: 'Merchant' },
+    { id: 'merchantName', title: 'Merchant', formatter: linkToClubMerchantFormatter },
     {
       id: 'club',
       title: 'Type',
