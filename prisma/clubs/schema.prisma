@@ -31,6 +31,7 @@ model Merchant {
   Club                  Club[]
   MerchantEmailSettings MerchantEmailSettings?
   GDPRRequest           GDPRRequest[]
+  UsageBillingRecord    UsageBillingRecord[]
   bundleDiscountId      String? // Shopify automatic discount GID for bundle Function
   bundleCartTransformId String? // Shopify CartTransform ID for bundle Function
 
@@ -153,41 +154,42 @@ model AppBillingPlan {
 }
 
 model Club {
-  id                                String            @id @default(cuid())
-  createdAt                         DateTime          @default(now())
-  updatedAt                         DateTime          @updatedAt
+  id                                String               @id @default(cuid())
+  createdAt                         DateTime             @default(now())
+  updatedAt                         DateTime             @updatedAt
   name                              String
   description                       String?
-  timezone                          ClubTz            @default(America_New_York)
+  timezone                          ClubTz               @default(America_New_York)
   platformHandle                    String?
-  archived                          Boolean           @default(false)
-  status                            ClubStatus        @default(draft)
+  archived                          Boolean              @default(false)
+  status                            ClubStatus           @default(draft)
   platformProductId                 String?
   platformVariantId                 String?
   platformSellingPlanId             String?
   platformClubLocationId            String? // the inventory source location for this club — defaults to primary fulfillment location if null
-  platformCustomerTag               String?           @default("club_member") // tag to add to customers who are members of this club
-  membershipPrice                   Float             @default(0) // recurring membership fee amount (mirrors Shopify variant price)
-  membershipRenewalFrequency        Int               @default(12) // in months, eg 3 means every 3 months, default is yearly
-  estimatedReleaseFrequency         Int               @default(4)
-  estimatedReleaseUnit              TimeUnit          @default(month)
-  releaseType                       ReleaseType       @default(automatic)
-  clubType                          ClubType          @default(release) // release or bundle subscription
-  bundleFrequencies                 BundleFrequency[] @default([]) // frequencies offered for bundle subscription clubs (empty for release clubs)
-  defaultInventoryAllocationPeriod  Int               @default(3) // in days, when a release is created, how many days before should inventory be allocated to hold
-  defaultCustomerSignupCutoffPeriod Int               @default(7) // in days, how many days before a release should customers be allowed to sign up
-  allowSkipRelease                  Boolean           @default(true)
-  addComplianceProducts             Boolean           @default(false) // if true, compliance products will be added to the release orders automatically - requires connection to CrushSuite compliance app
-  billingInventoryPolicy            String            @default("PRODUCT_VARIANT_INVENTORY_POLICY") // "PRODUCT_VARIANT_INVENTORY_POLICY" | "ALLOW_OVERSELLING"
-  currencyCode                      String            @default("USD")
-  market                            String            @default("US")
-  nextMemberNumber                  Int               @default(0) // atomic counter for generating sequential member numbers
+  platformCustomerTag               String?              @default("club_member") // tag to add to customers who are members of this club
+  membershipPrice                   Float                @default(0) // recurring membership fee amount (mirrors Shopify variant price)
+  membershipRenewalFrequency        Int                  @default(12) // in months, eg 3 means every 3 months, default is yearly
+  estimatedReleaseFrequency         Int                  @default(4)
+  estimatedReleaseUnit              TimeUnit             @default(month)
+  releaseType                       ReleaseType          @default(automatic)
+  clubType                          ClubType             @default(release) // release or bundle subscription
+  bundleFrequencies                 BundleFrequency[]    @default([]) // frequencies offered for bundle subscription clubs (empty for release clubs)
+  defaultInventoryAllocationPeriod  Int                  @default(3) // in days, when a release is created, how many days before should inventory be allocated to hold
+  defaultCustomerSignupCutoffPeriod Int                  @default(7) // in days, how many days before a release should customers be allowed to sign up
+  allowSkipRelease                  Boolean              @default(true)
+  addComplianceProducts             Boolean              @default(false) // if true, compliance products will be added to the release orders automatically - requires connection to CrushSuite compliance app
+  billingInventoryPolicy            String               @default("PRODUCT_VARIANT_INVENTORY_POLICY") // "PRODUCT_VARIANT_INVENTORY_POLICY" | "ALLOW_OVERSELLING"
+  currencyCode                      String               @default("USD")
+  market                            String               @default("US")
+  nextMemberNumber                  Int                  @default(0) // atomic counter for generating sequential member numbers
   merchantId                        Int
-  merchant                          Merchant          @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  merchant                          Merchant             @relation(fields: [merchantId], references: [id], onDelete: Cascade)
   Release                           Release[]
   Membership                        Membership[]
   ClubMigration                     ClubMigration[]
   BundleType                        BundleType[]
+  UsageBillingRecord                UsageBillingRecord[]
 }
 
 enum ClubType {
@@ -275,6 +277,7 @@ model Release {
   ReleaseOrder                      ReleaseOrder[]
   ReleaseInventoryReservation       ReleaseInventoryReservation[]
   releaseDiscounts                  ReleaseDiscount[]
+  ReleaseReprocessLog               ReleaseReprocessLog[]
 
   @@index([clubId])
   @@index([clubId, releaseDate])
@@ -516,8 +519,9 @@ model ClubCustomer {
   defaultBillingAddress          Json?
   notes                          String?
 
-  ReleaseOrder ReleaseOrder[]
-  Membership   Membership[]
+  ReleaseOrder       ReleaseOrder[]
+  Membership         Membership[]
+  UsageBillingRecord UsageBillingRecord[]
 
   @@unique([platformCustomerId, shop])
 }
@@ -675,6 +679,7 @@ enum BundleOrderStatus {
   FAILED // billing failed
   SKIPPED // customer skipped this cycle
   CHALLENGED // 3D Secure challenge from financial institution
+  ORDER_ID_UNRESOLVED // billing succeeded but the resulting order ID could not be confirmed
 }
 
 /// Where a BundleOrder originated from. Drives billing-CRON behaviour
@@ -1330,6 +1335,105 @@ model GDPRRequest {
 
   @@index([shop])
   @@index([type, completed])
+}
+
+// ─── Usage Billing (merchant → us) ──────────────────────────────────
+
+/// Ledger of the platform usage fee **we** charge merchants via Shopify's App
+/// Events API — distinct from the customer charges we create on a merchant's
+/// behalf. One row per fee ever owed, written by the call site at the moment it
+/// enqueues (never by the job — a job that never runs must still leave evidence).
+/// Doubles as the internal revenue record and as the input to the reconciliation
+/// CRON. See documentation/stuck-releases-risks.md §4 D1.
+model UsageBillingRecord {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// Stable App Events key (`member-|bundle-|release-${orderId}`). Also the
+  /// BullMQ jobId, and the only key that correlates back to Shopify — the App
+  /// Events API returns no event ID, so Dev Dashboard logs are filtered by this.
+  idempotencyKey String             @unique
+  source         UsageBillingSource
+
+  shop           String
+  merchantId     Int
+  merchant       Merchant      @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  clubId         String?
+  club           Club?         @relation(fields: [clubId], references: [id], onDelete: SetNull)
+  clubCustomerId String?
+  clubCustomer   ClubCustomer? @relation(fields: [clubCustomerId], references: [id], onDelete: SetNull)
+  /// Originating record — MembershipBillingRecord.id | BundleOrder.id | ReleaseOrder.id.
+  /// Deliberately untyped (polymorphic across the three sources), read with `source`.
+  sourceRecordId String?
+
+  platformOrderId String
+  orderValue      Float? // order total the meter's percentage applies to
+  currencyCode    String?
+  reportedValue   Int? // whole-dollar value actually sent to App Events
+  eventHandle     String? // meter handle, in case it ever changes
+
+  status        UsageBillingStatus @default(PENDING)
+  /// When App Events returned 202 + success:true. NOT proof of billing: a 202
+  /// only means "received" — validation happens async and is visible only in the
+  /// Dev Dashboard. Hence ACCEPTED, never SUCCESS.
+  acceptedAt    DateTime?
+  /// Shopify replied `Idempotent-Replay: true` — already on record, not re-billed.
+  replayed      Boolean            @default(false)
+  /// The timestamp we sent; decides which billing cycle it lands in (PERIOD_CLOSED).
+  sentTimestamp DateTime?
+  attemptCount  Int                @default(0)
+  lastError     String?
+
+  @@index([shop, createdAt])
+  @@index([status, createdAt])
+  @@index([clubId])
+  @@index([platformOrderId])
+}
+
+enum UsageBillingSource {
+  MEMBER
+  BUNDLE
+  RELEASE
+}
+
+enum UsageBillingStatus {
+  /// Owed, not yet accepted by App Events. Reconciliation re-fires.
+  PENDING
+  /// 202 + success:true. The strongest claim the API supports.
+  ACCEPTED
+  /// Correctly nothing owed ($0 order — App Events rejects value:0). Never re-fired.
+  SKIPPED
+  /// Transient or credential failure. Reconciliation re-fires.
+  FAILED
+  /// Permanently refused (400/403, or 202 success:false). Needs a human, never re-fired.
+  REJECTED
+}
+
+// ─── Release Reprocess Audit ────────────────────────────────────────
+
+/// One row per merchant invocation of "Reprocess release", which re-drives a
+/// stalled stage — including firing subscription billing attempts against
+/// members' saved cards. The durable forensic record behind a disputed charge,
+/// and what lets the banner survive a page refresh mid-run.
+///
+/// `triggeredBy` is shop-level, not per-user: it derives from
+/// `session.onlineAccessInfo.associated_user`, but the app does not enable
+/// online tokens, so it always falls back to the shop domain.
+/// See documentation/releases/manual-reprocess.md §Audit.
+model ReleaseReprocessLog {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  releaseId   String
+  release     Release @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+  shop        String
+  /// orders_not_created | contracts_not_generated | billing_not_attempted
+  stage       String
+  triggeredBy String
+  jobId       String?
+
+  @@index([releaseId, createdAt])
 }
 
 // ─── Feature Flags ──────────────────────────────────────────────────
