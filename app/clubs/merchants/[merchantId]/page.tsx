@@ -38,7 +38,7 @@ export default async function Page(props: { params: Promise<{ merchantId: string
       // platformIanaTimezone: true,
       platformStateCode: true,
       // platformProvince: true,
-      platformCity: true,
+      // platformCity: true,
       platformCountryCode: true,
       platformZipCode: true,
       platformCurrencyCode: true,
@@ -111,7 +111,7 @@ export default async function Page(props: { params: Promise<{ merchantId: string
   ];
 
   const location = [
-    merchant.platformCity,
+    // merchant.platformCity,
     // merchant.platformProvince || merchant.platformStateCode,
     merchant.platformStateCode,
     merchant.platformZipCode,
