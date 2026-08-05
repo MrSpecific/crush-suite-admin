@@ -4,7 +4,12 @@ import { QuickDataList } from '@/app/components/QuickDataList';
 import { DataTable } from '@/app/components/DataTable';
 import { NotFound } from '@/app/components/NotFound';
 import { Badge, Box, Card, Flex, Grid, Heading, Text } from '@radix-ui/themes';
-import { clubStatusFormatter, clubTypeFormatter, dateFormatter, dateTimeFormatter } from '@/lib/formatters';
+import {
+  clubStatusFormatter,
+  clubTypeFormatter,
+  dateFormatter,
+  dateTimeFormatter,
+} from '@/lib/formatters';
 import { ButtonLink } from '@/app/components/ButtonLink';
 import { clubsMerchantStatusMetaData, merchantEmailTypeMetaData } from '@/lib/metaData';
 
@@ -30,7 +35,7 @@ export default async function Page(props: { params: Promise<{ merchantId: string
       platformShopName: true,
       platformPhone: true,
       platformTimezone: true,
-      platformIanaTimezone: true,
+      // platformIanaTimezone: true,
       platformStateCode: true,
       platformProvince: true,
       platformCity: true,
@@ -73,10 +78,20 @@ export default async function Page(props: { params: Promise<{ merchantId: string
     where: { shop: merchant.shop },
     orderBy: { createdAt: 'desc' },
     take: 10,
-    select: { id: true, emailType: true, sentTo: true, success: true, error: true, createdAt: true },
+    select: {
+      id: true,
+      emailType: true,
+      sentTo: true,
+      success: true,
+      error: true,
+      createdAt: true,
+    },
   });
 
-  const statusMeta = clubsMerchantStatusMetaData[merchant.status] ?? { label: merchant.status, color: 'gray' };
+  const statusMeta = clubsMerchantStatusMetaData[merchant.status] ?? {
+    label: merchant.status,
+    color: 'gray',
+  };
 
   const clubHeaders = [
     { id: 'name', title: 'Name' },
@@ -95,7 +110,11 @@ export default async function Page(props: { params: Promise<{ merchantId: string
     { type: 'actions' as const, title: 'Actions' },
   ];
 
-  const location = [merchant.platformCity, merchant.platformProvince || merchant.platformStateCode, merchant.platformZipCode]
+  const location = [
+    merchant.platformCity,
+    merchant.platformProvince || merchant.platformStateCode,
+    merchant.platformZipCode,
+  ]
     .filter(Boolean)
     .join(', ');
 
@@ -108,14 +127,20 @@ export default async function Page(props: { params: Promise<{ merchantId: string
           </Heading>
           <QuickDataList
             data={[
-              { label: 'Shop', value: merchant.shop, linkTo: `//${merchant.shop}`, target: '_blank' },
+              {
+                label: 'Shop',
+                value: merchant.shop,
+                linkTo: `//${merchant.shop}`,
+                target: '_blank',
+              },
               { label: 'Shop ID', value: merchant.platformShopId, as: 'code' },
               { label: 'Store Name', value: merchant.platformShopName },
               {
                 label: 'Email',
                 value: merchant.platformEmail,
                 linkTo: merchant.platformEmail ? `mailto:${merchant.platformEmail}` : undefined,
-                tooltip: 'Destination for all merchant emails and the fallback support address on customer emails.',
+                tooltip:
+                  'Destination for all merchant emails and the fallback support address on customer emails.',
               },
               { label: 'Phone', value: merchant.platformPhone },
               {
@@ -131,7 +156,13 @@ export default async function Page(props: { params: Promise<{ merchantId: string
                 ),
               },
               { label: 'Billing Plan', value: merchant.AppBillingPlan?.name },
-              { label: 'Plan Price', value: merchant.AppBillingPlan?.price != null ? `$${merchant.AppBillingPlan.price.toFixed(2)} / mo` : undefined },
+              {
+                label: 'Plan Price',
+                value:
+                  merchant.AppBillingPlan?.price != null
+                    ? `$${merchant.AppBillingPlan.price.toFixed(2)} / mo`
+                    : undefined,
+              },
               { label: 'Created', value: dateFormatter(merchant.createdAt) },
               { label: 'Updated', value: dateFormatter(merchant.updatedAt) },
             ]}
@@ -144,15 +175,20 @@ export default async function Page(props: { params: Promise<{ merchantId: string
           </Heading>
           <QuickDataList
             data={[
-              { label: 'Domain', value: merchant.platformDomain, linkTo: merchant.platformDomain ? `//${merchant.platformDomain}` : undefined, target: '_blank' },
+              {
+                label: 'Domain',
+                value: merchant.platformDomain,
+                linkTo: merchant.platformDomain ? `//${merchant.platformDomain}` : undefined,
+                target: '_blank',
+              },
               { label: 'Location', value: location || undefined },
               { label: 'Country', value: merchant.platformCountryCode },
               { label: 'Currency', value: merchant.platformCurrencyCode },
-              {
-                label: 'Timezone',
-                value: merchant.platformIanaTimezone,
-                tooltip: merchant.platformTimezone ? `Abbreviation: ${merchant.platformTimezone} (DST-dependent)` : undefined,
-              },
+              // {
+              //   label: 'Timezone',
+              //   value: merchant.platformIanaTimezone,
+              //   tooltip: merchant.platformTimezone ? `Abbreviation: ${merchant.platformTimezone} (DST-dependent)` : undefined,
+              // },
               { label: 'Plan', value: merchant.platformPlanName },
               {
                 label: 'Shopify Plus',
@@ -174,10 +210,15 @@ export default async function Page(props: { params: Promise<{ merchantId: string
           </Heading>
           <QuickDataList
             data={[
-              { label: 'Installed', value: merchant.installedAt ? dateTimeFormatter(merchant.installedAt) : undefined },
+              {
+                label: 'Installed',
+                value: merchant.installedAt ? dateTimeFormatter(merchant.installedAt) : undefined,
+              },
               {
                 label: 'Uninstalled',
-                value: merchant.uninstalledAt ? dateTimeFormatter(merchant.uninstalledAt) : undefined,
+                value: merchant.uninstalledAt
+                  ? dateTimeFormatter(merchant.uninstalledAt)
+                  : undefined,
                 color: merchant.uninstalledAt ? 'orange' : undefined,
               },
               {
@@ -191,7 +232,9 @@ export default async function Page(props: { params: Promise<{ merchantId: string
               {
                 label: 'Sync Forced',
                 children: merchant.syncForceUpdate ? (
-                  <Badge color="orange" variant="soft">Queued</Badge>
+                  <Badge color="orange" variant="soft">
+                    Queued
+                  </Badge>
                 ) : undefined,
               },
             ]}
@@ -230,7 +273,9 @@ export default async function Page(props: { params: Promise<{ merchantId: string
       </Box>
 
       <Box>
-        <Heading size="4" mb="3">Recent Merchant Emails</Heading>
+        <Heading size="4" mb="3">
+          Recent Merchant Emails
+        </Heading>
         {emailLogs.length > 0 ? (
           <DataTable
             headers={[
@@ -238,8 +283,14 @@ export default async function Page(props: { params: Promise<{ merchantId: string
                 id: 'emailType',
                 title: 'Type',
                 formatter: (v: string) => {
-                  const meta = merchantEmailTypeMetaData[v as keyof typeof merchantEmailTypeMetaData] ?? { label: v, color: 'gray' };
-                  return <Badge color={meta.color} variant="soft" size="1">{meta.label}</Badge>;
+                  const meta = merchantEmailTypeMetaData[
+                    v as keyof typeof merchantEmailTypeMetaData
+                  ] ?? { label: v, color: 'gray' };
+                  return (
+                    <Badge color={meta.color} variant="soft" size="1">
+                      {meta.label}
+                    </Badge>
+                  );
                 },
               },
               { id: 'sentTo', title: 'Sent To' },
@@ -262,7 +313,9 @@ export default async function Page(props: { params: Promise<{ merchantId: string
             data={emailLogs}
           />
         ) : (
-          <Text color="gray" size="2">No email logs for this merchant.</Text>
+          <Text color="gray" size="2">
+            No email logs for this merchant.
+          </Text>
         )}
       </Box>
     </PageLayout>
