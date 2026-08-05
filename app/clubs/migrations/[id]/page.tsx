@@ -58,7 +58,7 @@ export default async function Page(
       paymentResolvedCount: true,
       contractCreatedCount: true,
       errorCount: true,
-      contractStrategy: true,
+      useExistingShopifyPaymentMethod: true,
       gatewayType: true,
       gracePeriodDays: true,
       sendWelcomeEmails: true,
@@ -86,6 +86,10 @@ export default async function Page(
       error: true,
       errorPhase: true,
       membershipId: true,
+      paymentMethodExists: true,
+      paymentEmailSent: true,
+      paymentEmailSentAt: true,
+      paymentEmailSendCount: true,
       contractCreated: true,
       welcomeEmailSent: true,
     },
@@ -113,6 +117,20 @@ export default async function Page(
           {value.replace(/_/g, ' ')}
         </Badge>
       ),
+    },
+    {
+      id: 'paymentMethodExists',
+      title: 'Payment',
+      formatter: (v: boolean, row: any) =>
+        v ? (
+          <Badge color="green" variant="soft" size="1">On File</Badge>
+        ) : row.paymentEmailSent ? (
+          <Badge color="orange" variant="soft" size="1" title={row.paymentEmailSentAt ? dateTimeFormatter(row.paymentEmailSentAt) : undefined}>
+            Email Sent{row.paymentEmailSendCount > 1 ? ` (${row.paymentEmailSendCount})` : ''}
+          </Badge>
+        ) : (
+          '—'
+        ),
     },
     {
       id: 'contractCreated',
@@ -201,7 +219,11 @@ export default async function Page(
             <Heading size="3" mb="3">Configuration</Heading>
             <QuickDataList
               data={[
-                { label: 'Contract Strategy', value: migration.contractStrategy },
+                {
+                  label: 'Use Existing Shopify Payment',
+                  value: migration.useExistingShopifyPaymentMethod ? 'Yes' : 'No',
+                  tooltip: 'Applies a card the customer already has saved in Shopify to their club membership. CSV gateway-token transfer always wins over this.',
+                },
                 { label: 'Gateway Type', value: migration.gatewayType },
                 {
                   label: 'Grace Period',

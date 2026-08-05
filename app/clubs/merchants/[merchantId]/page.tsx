@@ -24,11 +24,29 @@ export default async function Page(props: { params: Promise<{ merchantId: string
       id: true,
       shop: true,
       status: true,
+      needsReauth: true,
       platformEmail: true,
+      platformShopId: true,
       platformShopName: true,
       platformPhone: true,
       platformTimezone: true,
+      platformIanaTimezone: true,
       platformStateCode: true,
+      platformProvince: true,
+      platformCity: true,
+      platformCountryCode: true,
+      platformZipCode: true,
+      platformCurrencyCode: true,
+      platformPlanName: true,
+      platformDomain: true,
+      isShopifyPlus: true,
+      platformBillingId: true,
+      platformBillingStatus: true,
+      syncedAt: true,
+      syncForceUpdate: true,
+      installedAt: true,
+      uninstalledAt: true,
+      reinstallCount: true,
       createdAt: true,
       updatedAt: true,
       AppBillingPlan: {
@@ -77,9 +95,13 @@ export default async function Page(props: { params: Promise<{ merchantId: string
     { type: 'actions' as const, title: 'Actions' },
   ];
 
+  const location = [merchant.platformCity, merchant.platformProvince || merchant.platformStateCode, merchant.platformZipCode]
+    .filter(Boolean)
+    .join(', ');
+
   return (
     <PageLayout heading={merchant.platformShopName ?? merchant.shop}>
-      <Grid columns={{ initial: '1', md: '2' }} gap="4" mb="6">
+      <Grid columns={{ initial: '1', md: '2', lg: '3' }} gap="4" mb="6">
         <Card>
           <Heading size="3" mb="3">
             Merchant Details
@@ -87,19 +109,91 @@ export default async function Page(props: { params: Promise<{ merchantId: string
           <QuickDataList
             data={[
               { label: 'Shop', value: merchant.shop, linkTo: `//${merchant.shop}`, target: '_blank' },
+              { label: 'Shop ID', value: merchant.platformShopId, as: 'code' },
               { label: 'Store Name', value: merchant.platformShopName },
-              { label: 'Email', value: merchant.platformEmail, linkTo: `mailto:${merchant.platformEmail}` },
+              {
+                label: 'Email',
+                value: merchant.platformEmail,
+                linkTo: merchant.platformEmail ? `mailto:${merchant.platformEmail}` : undefined,
+                tooltip: 'Destination for all merchant emails and the fallback support address on customer emails.',
+              },
               { label: 'Phone', value: merchant.platformPhone },
-              { label: 'Timezone', value: merchant.platformTimezone },
-              { label: 'State', value: merchant.platformStateCode },
               {
                 label: 'Status',
                 children: <Badge color={statusMeta.color}>{statusMeta.label}</Badge>,
+              },
+              {
+                label: 'Needs Reauth',
+                children: (
+                  <Badge color={merchant.needsReauth ? 'red' : 'gray'} variant="soft">
+                    {merchant.needsReauth ? 'Yes' : 'No'}
+                  </Badge>
+                ),
               },
               { label: 'Billing Plan', value: merchant.AppBillingPlan?.name },
               { label: 'Plan Price', value: merchant.AppBillingPlan?.price != null ? `$${merchant.AppBillingPlan.price.toFixed(2)} / mo` : undefined },
               { label: 'Created', value: dateFormatter(merchant.createdAt) },
               { label: 'Updated', value: dateFormatter(merchant.updatedAt) },
+            ]}
+          />
+        </Card>
+
+        <Card>
+          <Heading size="3" mb="3">
+            Shopify Profile
+          </Heading>
+          <QuickDataList
+            data={[
+              { label: 'Domain', value: merchant.platformDomain, linkTo: merchant.platformDomain ? `//${merchant.platformDomain}` : undefined, target: '_blank' },
+              { label: 'Location', value: location || undefined },
+              { label: 'Country', value: merchant.platformCountryCode },
+              { label: 'Currency', value: merchant.platformCurrencyCode },
+              {
+                label: 'Timezone',
+                value: merchant.platformIanaTimezone,
+                tooltip: merchant.platformTimezone ? `Abbreviation: ${merchant.platformTimezone} (DST-dependent)` : undefined,
+              },
+              { label: 'Plan', value: merchant.platformPlanName },
+              {
+                label: 'Shopify Plus',
+                children: (
+                  <Badge color={merchant.isShopifyPlus ? 'iris' : 'gray'} variant="soft">
+                    {merchant.isShopifyPlus ? 'Yes' : 'No'}
+                  </Badge>
+                ),
+              },
+              { label: 'App Billing Status', value: merchant.platformBillingStatus, badge: true },
+              { label: 'App Billing ID', value: merchant.platformBillingId, clipboard: true },
+            ]}
+          />
+        </Card>
+
+        <Card>
+          <Heading size="3" mb="3">
+            Install &amp; Sync
+          </Heading>
+          <QuickDataList
+            data={[
+              { label: 'Installed', value: merchant.installedAt ? dateTimeFormatter(merchant.installedAt) : undefined },
+              {
+                label: 'Uninstalled',
+                value: merchant.uninstalledAt ? dateTimeFormatter(merchant.uninstalledAt) : undefined,
+                color: merchant.uninstalledAt ? 'orange' : undefined,
+              },
+              {
+                label: 'Reinstalls',
+                value: merchant.reinstallCount > 0 ? merchant.reinstallCount.toString() : undefined,
+              },
+              {
+                label: 'Last Profile Sync',
+                value: merchant.syncedAt ? dateTimeFormatter(merchant.syncedAt) : 'Never',
+              },
+              {
+                label: 'Sync Forced',
+                children: merchant.syncForceUpdate ? (
+                  <Badge color="orange" variant="soft">Queued</Badge>
+                ) : undefined,
+              },
             ]}
           />
         </Card>

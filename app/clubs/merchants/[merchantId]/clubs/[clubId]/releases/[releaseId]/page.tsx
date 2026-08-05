@@ -63,6 +63,7 @@ export default async function Page(
       allReleaseOrdersCreatedAt: true,
       contractsGenerated: true,
       contractsGeneratedAt: true,
+      contractBulkOperationId: true,
       attemptedFirstBillingAt: true,
       clubId: true,
       club: {
@@ -319,6 +320,13 @@ export default async function Page(
                   value: release.contractsGeneratedAt
                     ? dateTimeFormatter(release.contractsGeneratedAt)
                     : undefined,
+                },
+                {
+                  label: 'Contract Bulk Op',
+                  value: release.contractBulkOperationId,
+                  as: 'code',
+                  clipboard: true,
+                  tooltip: 'Shopify bulk operation GID for in-flight contract creation. Present while a batch is running; reconciled before the next batch.',
                 },
                 {
                   label: 'First Billing Attempted',

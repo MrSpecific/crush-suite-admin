@@ -17,13 +17,55 @@ model Merchant {
   // chain is dead (re-auth required). Cleared by the app on next successful
   // authenticate.admin(). See documentation/expiring-offline-tokens.md (§4.5).
   needsReauth           Boolean                @default(false)
+  //
+  // ─── Shopify shop profile ─────────────────────────────────────────────────
+  // Mirrored from the shop's Shopify record. Written at install, refreshed by
+  // the `shop/update` webhook and the daily merchant-sync CRON. Treat as
+  // analytics + sensible defaults — do NOT gate business logic on these, with
+  // the deliberate exception of `platformEmail` (see below).
+  // Full write-up: documentation/merchant-data-sync.md
+  //
+  /// Store contact email. NOT purely analytics: this is the To: address for
+  /// every merchant email we send, and the fallback support address stamped on
+  /// customer-facing emails. Staleness here silently black-holes alerts.
   platformEmail         String?
   platformShopId        String? // Shopify shop ID (degidified, e.g., "12345"); needed for Partner API activeSubscription
   platformShopName      String? // without the .myshopify.com
+  /// Shopify `timezoneAbbreviation` ("PDT"). DST-dependent, so it goes stale
+  /// twice a year on its own — display only. Use `platformIanaTimezone`.
   platformTimezone      String?
+  /// Shopify `ianaTimezone` ("America/Los_Angeles"). The authoritative one, and
+  /// what seeds a new club's timezone picker.
+  platformIanaTimezone  String?
   platformZipCode       String?
   platformStateCode     String?
+  platformProvince      String?
+  platformCity          String?
+  platformCountryCode   String?
   platformPhone         String?
+  platformCurrencyCode  String?
+  platformPlanName      String? // Shopify plan, e.g. "Shopify Plus", "Advanced"
+  platformDomain        String? // primary storefront host, e.g. "shop.example.com"
+  isShopifyPlus         Boolean                @default(false)
+  /// Our app subscription as Shopify sees it. The AppBillingPlan FK records
+  /// which plan they picked; these record whether that subscription is still
+  /// live (ACTIVE / CANCELLED / FROZEN / …), which the FK alone cannot tell us.
+  platformBillingId     String?
+  platformBillingStatus String?
+  /// Last successful profile sync. Also the sync CRON's cursor — it selects the
+  /// least-recently-synced merchants, so progress survives a Redis flush or a
+  /// container swap mid-run. Null = never synced.
+  syncedAt              DateTime?
+  /// Set to jump the queue on the next sync tick (support tooling / manual
+  /// refresh). Cleared by the sync itself.
+  syncForceUpdate       Boolean                @default(false)
+  //
+  // ─── Install lifecycle ────────────────────────────────────────────────────
+  // `status` only ever holds the CURRENT state, so without these a churned or
+  // recovered merchant is indistinguishable from one who never left.
+  installedAt           DateTime?
+  uninstalledAt         DateTime?
+  reinstallCount        Int                    @default(0)
   ApiAccess             ApiAccess[]
   GDPR                  GDPR[]
   AppBillingPlan        AppBillingPlan?        @relation(fields: [appBillingPlanId], references: [id])
@@ -242,6 +284,7 @@ model Release {
   allReleaseOrdersCreatedAt         DateTime? // when the release orders were created
   contractsGenerated                Boolean                       @default(false) // if the contracts have been generated for this release
   contractsGeneratedAt              DateTime? // when the contracts were generated for this release
+  contractBulkOperationId           String? // Shopify bulk op GID for in-flight contract creates; reconcile before next batch
   attemptedFirstBillingAt           DateTime? // when we first attempted to bill customers for this release for all release orders
   releaseDate                       DateTime // when the orders should be created
   // REDUNDANT: today holds a copy of ...Name (a delivery-profile method NAME), NOT a real
@@ -408,6 +451,7 @@ model ReleaseOrder {
   platformCustomerId                String
   platformContractId                String? // eg the subscription contract ID in Shopify
   contractGeneratedAt               DateTime?
+  contractCreateAttemptedAt         DateTime? // set before create so recovery search only runs on retries
   attemptedFirstBillingAt           DateTime? // we only auto bill once per release order, so record when we first attempted to bill
   orderCreatedAt                    DateTime? // when the order was created in the platform
   platformOrderId                   String? // if the order has been created in Shopify
@@ -1095,21 +1139,26 @@ enum CustomerEmailType {
   ORDER_PROCESSING_NOTICE
   PAYMENT_SUCCESSFUL
   PAYMENT_FAILED
-  CHECKOUT_REQUIRED
   CARD_EXPIRING_SOON
   POS_ADD_PAYMENT
 }
 
+/// One row per (shop, emailType, dedupKey). `createdAt` is the FIRST send;
+/// `lastSentAt` / `sendCount` track repeats for the resendable types (see
+/// RESENDABLE_EMAIL_COOLDOWNS in CustomerEmail.model.ts). Once-only types never
+/// increment past 1.
 model CustomerEmailLog {
-  id        String            @id @default(cuid())
-  createdAt DateTime          @default(now())
-  shop      String
-  emailType CustomerEmailType
-  dedupKey  String
-  sentTo    String
-  success   Boolean           @default(true)
-  error     String?
-  metadata  Json?
+  id         String            @id @default(cuid())
+  createdAt  DateTime          @default(now())
+  lastSentAt DateTime          @default(now())
+  sendCount  Int               @default(1)
+  shop       String
+  emailType  CustomerEmailType
+  dedupKey   String
+  sentTo     String
+  success    Boolean           @default(true)
+  error      String?
+  metadata   Json?
 
   @@unique([shop, emailType, dedupKey])
   @@index([shop])
@@ -1171,10 +1220,14 @@ model ClubMigration {
   errorCount             Int @default(0)
 
   // Merchant config choices
-  contractStrategy  MigrationContractStrategy @default(EAGER)
-  gatewayType       String? // "stripe" | "braintree" | "authorize_net" — only if CSV has gateway tokens
-  gracePeriodDays   Int                       @default(0)
-  sendWelcomeEmails Boolean                   @default(false)
+  // Opt-in: apply a card the customer already has saved in Shopify to their club
+  // membership. Off by default — they may want to bill the club to a different
+  // card than one already on their account (those members get an add-payment
+  // email instead). CSV gateway-token transfer always wins over this.
+  useExistingShopifyPaymentMethod Boolean @default(false)
+  gatewayType                     String? // "stripe" | "braintree" | "authorize_net" — only if CSV has gateway tokens
+  gracePeriodDays                 Int     @default(0)
+  sendWelcomeEmails               Boolean @default(false)
 
   // File tracking
   filename String? // original CSV filename for display
@@ -1264,12 +1317,13 @@ model ClubMigrationRecord {
   bundleTypeIdResolved    String?
 
   // Status flags
-  paymentMethodExists   Boolean   @default(false)
-  checkoutLinkSent      Boolean   @default(false)
-  checkoutLinkSentAt    DateTime?
-  checkoutLinkSendCount Int       @default(0)
-  checkoutLink          String?
-  migrationCode         String? // unique per-record UUID used to validate migration checkout links
+  paymentMethodExists Boolean @default(false)
+
+  /// Tracks the add-payment email sent to a member who has no payment method
+  /// after import, so they can add a card in the Customer Accounts extension.
+  paymentEmailSent      Boolean   @default(false)
+  paymentEmailSentAt    DateTime?
+  paymentEmailSendCount Int       @default(0)
   contractCreated       Boolean   @default(false)
   welcomeEmailSent      Boolean   @default(false)
 
@@ -1281,7 +1335,6 @@ model ClubMigrationRecord {
   @@index([migrationId])
   @@index([migrationId, status])
   @@index([platformCustomerId])
-  @@index([migrationCode])
 }
 
 enum MigrationStatus {
@@ -1294,11 +1347,6 @@ enum MigrationStatus {
   COMPLETED
   FAILED
   CANCELLED
-}
-
-enum MigrationContractStrategy {
-  EAGER // Create contracts even without payment method
-  WAIT_FOR_PAYMENT // Only create when payment method exists
 }
 
 enum MigrationRecordStatus {

@@ -158,7 +158,7 @@ export default async function Page(props: { params: Promise<{ id: string }> }) {
     }),
     prismaClubs.customerEmailLog.findMany({
       where: { shop: customer.shop, sentTo: customer.defaultEmail },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { lastSentAt: 'desc' },
       take: 20,
       select: {
         id: true,
@@ -166,6 +166,8 @@ export default async function Page(props: { params: Promise<{ id: string }> }) {
         success: true,
         error: true,
         createdAt: true,
+        lastSentAt: true,
+        sendCount: true,
       },
     }),
   ]);
@@ -317,7 +319,17 @@ export default async function Page(props: { params: Promise<{ id: string }> }) {
 
   // ─── Email log ────────────────────────────────────────────────────
   const emailHeaders = [
-    { id: 'createdAt', title: 'Sent', formatter: dateTimeFormatter },
+    { id: 'lastSentAt', title: 'Last Sent', formatter: dateTimeFormatter },
+    {
+      id: 'createdAt',
+      title: 'First Sent',
+      formatter: (v: Date, row: any) => (row.sendCount > 1 ? dateTimeFormatter(v) : '—'),
+    },
+    {
+      id: 'sendCount',
+      title: 'Sends',
+      formatter: (v: number) => (v > 1 ? v.toString() : '—'),
+    },
     { id: 'emailType', title: 'Type', formatter: (v: string) => titleCase(v) },
     {
       id: 'success',
