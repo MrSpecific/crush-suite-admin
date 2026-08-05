@@ -37,7 +37,7 @@ export default async function Page(props: { params: Promise<{ merchantId: string
       platformTimezone: true,
       // platformIanaTimezone: true,
       platformStateCode: true,
-      platformProvince: true,
+      // platformProvince: true,
       platformCity: true,
       platformCountryCode: true,
       platformZipCode: true,
@@ -112,7 +112,8 @@ export default async function Page(props: { params: Promise<{ merchantId: string
 
   const location = [
     merchant.platformCity,
-    merchant.platformProvince || merchant.platformStateCode,
+    // merchant.platformProvince || merchant.platformStateCode,
+    merchant.platformStateCode,
     merchant.platformZipCode,
   ]
     .filter(Boolean)
