@@ -3,6 +3,7 @@ import { PageLayout } from '@/app/components/PageLayout';
 import { QuickDataList } from '@/app/components/QuickDataList';
 import { DataTable } from '@/app/components/DataTable';
 import { NotFound } from '@/app/components/NotFound';
+import { ButtonLink } from '@/app/components/ButtonLink';
 import { Badge, Box, Card, Flex, Grid, Heading, Text } from '@radix-ui/themes';
 import { dateFormatter, dateTimeFormatter } from '@/lib/formatters';
 import type { RadixColor } from '@/types/radix-ui';
@@ -128,8 +129,17 @@ export default async function Page(
       discountAmount: true,
       deliveryPrice: true,
       createdAt: true,
+      clubCustomer: {
+        select: { defaultEmail: true, firstName: true, lastName: true },
+      },
     },
   });
+
+  const orderRows = releaseOrders.map((order) => ({
+    ...order,
+    customerEmail: order.clubCustomer.defaultEmail,
+    customerName: [order.clubCustomer.firstName, order.clubCustomer.lastName].filter(Boolean).join(' ') || '—',
+  }));
 
   const productHeaders = [
     { id: 'platformProductId', title: 'Product ID', as: 'code' as const },
@@ -399,10 +409,16 @@ export default async function Page(
         <Heading size="4" mb="3">
           Orders ({release._count.ReleaseOrder})
         </Heading>
-        {releaseOrders.length > 0 ? (
+        {orderRows.length > 0 ? (
           <DataTable
             headers={[
-              { id: 'platformCustomerId', title: 'Customer ID', as: 'code' as const },
+              {
+                id: 'customerEmail',
+                title: 'Email',
+                href: (_v: string, row: any) =>
+                  `/clubs/merchants/${merchantId}/clubs/${clubId}/releases/${releaseId}/orders/${row.id}`,
+              },
+              { id: 'customerName', title: 'Name' },
               {
                 id: 'skippedAt',
                 title: 'Status',
@@ -431,8 +447,14 @@ export default async function Page(
               },
               { id: 'orderCreatedAt', title: 'Ordered At', formatter: (v: Date | null) => v ? dateTimeFormatter(v) : '—' },
               { id: 'createdAt', title: 'Created', formatter: dateFormatter },
+              { type: 'actions' as const, title: 'Actions' },
             ]}
-            data={releaseOrders}
+            data={orderRows}
+            Actions={({ id }: { id: string }) => (
+              <ButtonLink href={`/clubs/merchants/${merchantId}/clubs/${clubId}/releases/${releaseId}/orders/${id}`}>
+                View
+              </ButtonLink>
+            )}
           />
         ) : (
           <Text color="gray" size="2">No orders for this release yet.</Text>
