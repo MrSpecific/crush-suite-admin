@@ -175,9 +175,16 @@ export default async function Page(
 
         <Box>
           <Card mb="4">
-            <Heading size="3" mb="3">
-              Membership
-            </Heading>
+            <Flex justify="between" align="center" mb="3">
+              <Heading size="3">Membership</Heading>
+              <ButtonLink
+                href={`/clubs/merchants/${merchantId}/clubs/${clubId}/members`}
+                variant="soft"
+                size="1"
+              >
+                View Members
+              </ButtonLink>
+            </Flex>
             <QuickDataList
               data={[
                 { label: 'Total Members', value: club.Membership.length.toString() },
