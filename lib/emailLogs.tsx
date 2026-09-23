@@ -1,4 +1,4 @@
-import { Badge } from '@radix-ui/themes';
+import { Badge, Code, Text } from '@radix-ui/themes';
 import { prismaClubs } from '@/lib/prisma-clubs';
 import { Prisma, type CustomerEmailType, type MerchantEmailType } from '@/generated/prisma/clubs';
 import { customerEmailTypeMetaData, merchantEmailTypeMetaData } from '@/lib/metaData';
@@ -100,13 +100,13 @@ export const countClubCustomerEmailLogs = async (filters: ClubCustomerEmailLogFi
   return count;
 };
 
-const failedBadge = (retryable: boolean | null) => (
+export const failedBadge = (retryable: boolean | null) => (
   <Badge color={retryable === false ? 'red' : 'orange'} variant="soft" size="1">
     {retryable === false ? 'Failed' : 'Failed (retrying)'}
   </Badge>
 );
 
-const sentBadge = (
+export const sentBadge = (
   <Badge color="green" variant="soft" size="1">
     Sent
   </Badge>
@@ -124,6 +124,7 @@ export const merchantEmailLogHeaders = [
   {
     id: 'emailType',
     title: 'Type',
+    href: (_v: string, row: { id: string }) => `/clubs/logs/merchant-emails/${row.id}`,
     formatter: (v: MerchantEmailType) => {
       const meta = merchantEmailTypeMetaData[v] ?? { label: v, color: 'gray' };
       return (
@@ -148,6 +149,7 @@ export const customerEmailLogHeaders = [
   {
     id: 'emailType',
     title: 'Type',
+    href: (_v: string, row: { id: string }) => `/clubs/logs/customer-emails/${row.id}`,
     formatter: (v: CustomerEmailType) => {
       const meta = customerEmailTypeMetaData[v] ?? { label: v, color: 'gray' };
       return (
@@ -186,3 +188,22 @@ export const shopHeader = {
   href: (_v: string, row: { merchantId?: number }) =>
     row.merchantId ? `/clubs/merchants/${row.merchantId}` : undefined,
 };
+
+export const getMetadataString = (metadata: Prisma.JsonValue, key: string) => {
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return null;
+  const value = metadata[key];
+  return typeof value === 'string' ? value : null;
+};
+
+export const EmailMetadata = ({ metadata }: { metadata: Prisma.JsonValue }) =>
+  metadata ? (
+    <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+      <Code size="2" variant="ghost">
+        {JSON.stringify(metadata, null, 2)}
+      </Code>
+    </pre>
+  ) : (
+    <Text color="gray" size="2">
+      No metadata.
+    </Text>
+  );

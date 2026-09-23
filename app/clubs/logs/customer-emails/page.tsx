@@ -9,16 +9,11 @@ import {
   customerEmailLogHeaders,
   emailStatusFilterOptions,
   getMerchantIdsByShop,
+  getMetadataString,
   parseEmailStatusFilter,
   shopHeader,
 } from '@/lib/emailLogs';
 import { Prisma } from '@/generated/prisma/clubs';
-
-const getMetadataString = (metadata: Prisma.JsonValue, key: string) => {
-  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return null;
-  const value = metadata[key];
-  return typeof value === 'string' ? value : null;
-};
 
 export default async function Page(props: { searchParams: Promise<PageSearchParams> }) {
   const searchParams = await props.searchParams;
@@ -73,7 +68,10 @@ export default async function Page(props: { searchParams: Promise<PageSearchPara
   ];
 
   return (
-    <PageLayout heading="Customer Emails" subheading="Emails sent to club members, across all shops">
+    <PageLayout
+      heading="Customer Emails"
+      subheading="Emails sent to club members, across all shops"
+    >
       <DataFilter filters={filters} />
       <DataTable headers={headers} data={rows} />
       <Pagination count={count} />
