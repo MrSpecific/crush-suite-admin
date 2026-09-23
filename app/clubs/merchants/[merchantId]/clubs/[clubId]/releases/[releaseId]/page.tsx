@@ -185,7 +185,7 @@ export default async function Page(
     {
       id: 'discountPercent',
       title: 'Percent',
-      formatter: (v: number | null) => (v != null ? `${(v * 100).toFixed(1)}%` : '—'),
+      formatter: (v: number | null) => (v != null ? `${v}%` : '—'),
     },
     {
       id: 'discountAmount',
