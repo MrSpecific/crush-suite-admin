@@ -135,6 +135,39 @@ export default async function Page(
     },
   });
 
+  // Active members who belong to this release cycle but have no order for it yet
+  const membersWithoutOrderWhere = {
+    clubId,
+    status: 'ACTIVE' as const,
+    joinedAt: { lt: release.releaseDate },
+    customer: { ReleaseOrder: { none: { releaseId } } },
+  };
+
+  const [membersWithoutOrder, membersWithoutOrderCount] = await Promise.all([
+    prismaClubs.membership.findMany({
+      where: membersWithoutOrderWhere,
+      orderBy: { joinedAt: 'asc' },
+      take: 100,
+      select: {
+        id: true,
+        memberNumber: true,
+        joinedAt: true,
+        customer: {
+          select: { id: true, platformCustomerId: true, defaultEmail: true, firstName: true, lastName: true },
+        },
+      },
+    }),
+    prismaClubs.membership.count({ where: membersWithoutOrderWhere }),
+  ]);
+
+  const memberWithoutOrderRows = membersWithoutOrder.map((membership) => ({
+    ...membership,
+    customerEmail: membership.customer.defaultEmail,
+    customerName: [membership.customer.firstName, membership.customer.lastName].filter(Boolean).join(' ') || '—',
+    platformCustomerId: membership.customer.platformCustomerId,
+    customerId: membership.customer.id,
+  }));
+
   const orderRows = releaseOrders.map((order) => ({
     ...order,
     customerEmail: order.clubCustomer.defaultEmail,
@@ -465,6 +498,41 @@ export default async function Page(
           </Text>
         )}
       </Box>
+
+      {/* Members without an order */}
+      {membersWithoutOrderCount > 0 && (
+        <Box mt="6">
+          <Heading size="4" mb="3">
+            Not Yet Customized ({membersWithoutOrderCount})
+          </Heading>
+          <Text as="p" size="2" color="gray" mb="3">
+            Active members who have not customized or been given an order for this release.
+          </Text>
+          <DataTable
+            headers={[
+              {
+                id: 'customerEmail',
+                title: 'Email',
+                href: (_v: string, row: any) => `/clubs/members/${row.customerId}`,
+              },
+              { id: 'customerName', title: 'Name' },
+              { id: 'memberNumber', title: 'Member #', formatter: (v: string | null) => v ?? '—' },
+              { id: 'platformCustomerId', title: 'Customer ID', as: 'code' as const },
+              { id: 'joinedAt', title: 'Joined', formatter: dateFormatter },
+              { type: 'actions' as const, title: 'Actions' },
+            ]}
+            data={memberWithoutOrderRows}
+            Actions={({ customerId }: { customerId: string }) => (
+              <ButtonLink href={`/clubs/members/${customerId}`}>View</ButtonLink>
+            )}
+          />
+          {membersWithoutOrderCount > 100 && (
+            <Text size="1" color="gray" mt="2" as="p">
+              Showing first 100 of {membersWithoutOrderCount} members.
+            </Text>
+          )}
+        </Box>
+      )}
     </PageLayout>
   );
 }
