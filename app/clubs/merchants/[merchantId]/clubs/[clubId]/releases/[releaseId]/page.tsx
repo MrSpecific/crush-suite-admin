@@ -1,4 +1,11 @@
+import { prisma } from '@/lib/prisma';
 import { prismaClubs } from '@/lib/prisma-clubs';
+import { getClubsShopAccessToken } from '@/lib/clubs-shopify';
+import {
+  getShopifyAdminProductUrl,
+  getShopifyVariantsByPlatformVariantIds,
+  type ShopifyVariantSummary,
+} from '@/lib/shopify';
 import { PageLayout } from '@/app/components/PageLayout';
 import { QuickDataList } from '@/app/components/QuickDataList';
 import { DataTable } from '@/app/components/DataTable';
@@ -17,6 +24,26 @@ const productKindColor: Record<string, RadixColor> = {
   default: 'blue',
   optional: 'gray',
 };
+
+// Club products may store Shopify GIDs; compliance products store the numeric id
+const numericShopifyId = (id: string) => id.split('/').pop() ?? id;
+
+const variantDisplayName = (variant: ShopifyVariantSummary) =>
+  variant.title && variant.title !== 'Default Title'
+    ? `${variant.product.title} — ${variant.title}`
+    : variant.product.title;
+
+// Names are a nicety: a missing/expired token or Shopify error falls back to the catalog
+async function getShopifyVariants(shop: string, platformVariantIds: string[]) {
+  try {
+    const accessToken = await getClubsShopAccessToken(shop);
+    if (!accessToken) return [];
+    return await getShopifyVariantsByPlatformVariantIds({ shop, accessToken, platformVariantIds });
+  } catch (error) {
+    console.error(`Failed to load Shopify variants for ${shop}`, error);
+    return [];
+  }
+}
 
 export default async function Page(
   props: {
@@ -168,6 +195,39 @@ export default async function Page(
     customerId: membership.customer.id,
   }));
 
+  // Product names come from Shopify; the compliance catalog (when synced) provides the detail page
+  const shop = release.club.merchant.shop;
+  const variantIds = release.ReleaseProduct.map((p) => numericShopifyId(p.platformVariantId));
+  const [catalogProducts, shopifyVariants] = await Promise.all([
+    prisma.product.findMany({
+      where: { shop, platformVariantId: { in: variantIds } },
+      select: { id: true, name: true, platformProductId: true, platformVariantId: true },
+    }),
+    getShopifyVariants(shop, variantIds),
+  ]);
+  const catalogByVariant = new Map(
+    catalogProducts.map((p) => [`${p.platformProductId}:${p.platformVariantId}`, p]),
+  );
+  const shopifyByVariant = new Map(shopifyVariants.map((v) => [v.legacyResourceId, v]));
+
+  // Default products first, then by the release's own ordering
+  const productRows = [...release.ReleaseProduct]
+    .sort((a, b) => Number(b.kind === 'default') - Number(a.kind === 'default'))
+    .map((product) => {
+      const variantId = numericShopifyId(product.platformVariantId);
+      const catalogProduct = catalogByVariant.get(
+        `${numericShopifyId(product.platformProductId)}:${variantId}`,
+      );
+      const shopifyVariant = shopifyByVariant.get(variantId);
+      return {
+        ...product,
+        name: shopifyVariant ? variantDisplayName(shopifyVariant) : catalogProduct?.name ?? '—',
+        productHref: catalogProduct
+          ? `/products/${catalogProduct.id}`
+          : getShopifyAdminProductUrl(shop, product.platformProductId),
+      };
+    });
+
   const orderRows = releaseOrders.map((order) => ({
     ...order,
     customerEmail: order.clubCustomer.defaultEmail,
@@ -175,6 +235,11 @@ export default async function Page(
   }));
 
   const productHeaders = [
+    {
+      id: 'name',
+      title: 'Name',
+      href: (_v: string, row: any) => row.productHref,
+    },
     { id: 'platformProductId', title: 'Product ID', as: 'code' as const },
     { id: 'platformVariantId', title: 'Variant ID', as: 'code' as const },
     {
@@ -419,7 +484,7 @@ export default async function Page(
           Products ({release.ReleaseProduct.length})
         </Heading>
         {release.ReleaseProduct.length > 0 ? (
-          <DataTable headers={productHeaders} data={release.ReleaseProduct} />
+          <DataTable headers={productHeaders} data={productRows} />
         ) : (
           <Text color="gray" size="2">
             No products on this release.

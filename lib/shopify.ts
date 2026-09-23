@@ -237,6 +237,70 @@ export function getShopifyOrderSourceLabel(order: ShopifyOrder | null) {
   );
 }
 
+export type ShopifyVariantSummary = {
+  id: string;
+  legacyResourceId: string;
+  title: string;
+  product: { id: string; legacyResourceId: string; title: string };
+};
+
+type ShopifyVariantsQueryData = {
+  nodes: Array<ShopifyVariantSummary | Record<string, never> | null>;
+};
+
+const SHOPIFY_VARIANTS_QUERY = /* GraphQL */ `
+  query CrushSuiteAdminVariants($ids: [ID!]!) {
+    nodes(ids: $ids) {
+      ... on ProductVariant {
+        id
+        legacyResourceId
+        title
+        product {
+          id
+          legacyResourceId
+          title
+        }
+      }
+    }
+  }
+`;
+
+export async function getShopifyVariantsByPlatformVariantIds({
+  shop,
+  accessToken,
+  platformVariantIds,
+}: {
+  shop: string;
+  accessToken: string;
+  platformVariantIds: string[];
+}) {
+  if (platformVariantIds.length === 0) return [];
+
+  const data = await shopifyAdminGraphql<ShopifyVariantsQueryData, { ids: string[] }>({
+    shop,
+    accessToken,
+    query: SHOPIFY_VARIANTS_QUERY,
+    variables: {
+      ids: [...new Set(platformVariantIds.map(toShopifyVariantGid))],
+    },
+  });
+
+  return data.nodes.filter((node): node is ShopifyVariantSummary => !!node && 'id' in node);
+}
+
+export function toShopifyVariantGid(platformVariantId: string) {
+  if (platformVariantId.startsWith('gid://shopify/ProductVariant/')) {
+    return platformVariantId;
+  }
+
+  return `gid://shopify/ProductVariant/${platformVariantId}`;
+}
+
+export function getShopifyAdminProductUrl(shop: string, platformProductId: string) {
+  const id = platformProductId.split('/').pop();
+  return `https://${normalizeShopifyShopDomain(shop)}/admin/products/${id}`;
+}
+
 export function getShopifyAdminOrderUrl(shop: string, platformOrderId: string) {
   return `https://${normalizeShopifyShopDomain(shop)}/admin/orders/${platformOrderId}`;
 }
