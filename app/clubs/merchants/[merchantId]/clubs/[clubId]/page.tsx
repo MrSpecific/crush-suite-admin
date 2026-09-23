@@ -7,7 +7,7 @@ import { Badge, Box, Card, Flex, Grid, Heading, Text } from '@radix-ui/themes';
 import { clubStatusFormatter, clubTypeFormatter, dateFormatter } from '@/lib/formatters';
 import { ButtonLink } from '@/app/components/ButtonLink';
 import type { RadixColor } from '@/types/radix-ui';
-import { customerEmailLogHeaders, getClubCustomerEmailLogs } from '@/lib/customerEmailLogs';
+import { customerEmailLogHeaders, getClubCustomerEmailLogs } from '@/lib/emailLogs';
 
 const releaseStatusColor: Record<string, RadixColor> = {
   draft: 'gray',

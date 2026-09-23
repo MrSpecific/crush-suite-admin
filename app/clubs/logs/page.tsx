@@ -16,12 +16,40 @@ const logSections = [
     description:
       "Audit trail of merchant-triggered \"Reprocess release\" runs, including re-driven billing attempts against members' saved cards.",
   },
+  {
+    href: '/clubs/logs/merchant-emails',
+    title: 'Merchant Emails',
+    description:
+      'Transactional emails sent to merchants — welcome, release reminders and summaries, member alerts, and reconnect prompts.',
+  },
+  {
+    href: '/clubs/logs/customer-emails',
+    title: 'Customer Emails',
+    description:
+      'Emails sent to club members — lifecycle, customization windows, order processing, payment results, and card expiry.',
+  },
 ];
 
+const emailCount = (total: number, failed: number) =>
+  failed > 0
+    ? { label: `${failed} failed`, value: failed, color: 'red' as const }
+    : { label: `${total} total`, value: total };
+
 export default async function Page() {
-  const [usageBillingIssues, reprocessCount] = await Promise.all([
+  const [
+    usageBillingIssues,
+    reprocessCount,
+    merchantEmailCount,
+    merchantEmailFailed,
+    customerEmailCount,
+    customerEmailFailed,
+  ] = await Promise.all([
     prismaClubs.usageBillingRecord.count({ where: { status: { in: ['FAILED', 'REJECTED'] } } }),
     prismaClubs.releaseReprocessLog.count(),
+    prismaClubs.merchantEmailLog.count(),
+    prismaClubs.merchantEmailLog.count({ where: { success: false } }),
+    prismaClubs.customerEmailLog.count(),
+    prismaClubs.customerEmailLog.count({ where: { success: false } }),
   ]);
 
   const counts: Record<string, { label: string; value: number; color?: 'red' } | undefined> = {
@@ -30,6 +58,8 @@ export default async function Page() {
         ? { label: `${usageBillingIssues} needs attention`, value: usageBillingIssues, color: 'red' }
         : undefined,
     '/clubs/logs/reprocess': { label: `${reprocessCount} total`, value: reprocessCount },
+    '/clubs/logs/merchant-emails': emailCount(merchantEmailCount, merchantEmailFailed),
+    '/clubs/logs/customer-emails': emailCount(customerEmailCount, customerEmailFailed),
   };
 
   return (

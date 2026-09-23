@@ -11,7 +11,8 @@ import {
   dateTimeFormatter,
 } from '@/lib/formatters';
 import { ButtonLink } from '@/app/components/ButtonLink';
-import { clubsMerchantStatusMetaData, merchantEmailTypeMetaData } from '@/lib/metaData';
+import { clubsMerchantStatusMetaData } from '@/lib/metaData';
+import { merchantEmailLogHeaders } from '@/lib/emailLogs';
 
 const ClubActions = ({ id, merchantId }: { id: string; merchantId: number }) => (
   <ButtonLink href={`/clubs/merchants/${merchantId}/clubs/${id}`}>View</ButtonLink>
@@ -89,6 +90,7 @@ export default async function Page(props: { params: Promise<{ merchantId: string
       emailType: true,
       sentTo: true,
       success: true,
+      retryable: true,
       error: true,
       createdAt: true,
     },
@@ -285,38 +287,7 @@ export default async function Page(props: { params: Promise<{ merchantId: string
         </Heading>
         {emailLogs.length > 0 ? (
           <DataTable
-            headers={[
-              {
-                id: 'emailType',
-                title: 'Type',
-                formatter: (v: string) => {
-                  const meta = merchantEmailTypeMetaData[
-                    v as keyof typeof merchantEmailTypeMetaData
-                  ] ?? { label: v, color: 'gray' };
-                  return (
-                    <Badge color={meta.color} variant="soft" size="1">
-                      {meta.label}
-                    </Badge>
-                  );
-                },
-              },
-              { id: 'sentTo', title: 'Sent To' },
-              {
-                id: 'success',
-                title: 'Status',
-                formatter: (v: boolean) => (
-                  <Badge color={v ? 'green' : 'red'} variant="soft" size="1">
-                    {v ? 'Sent' : 'Failed'}
-                  </Badge>
-                ),
-              },
-              {
-                id: 'error',
-                title: 'Error',
-                formatter: (v: string | null) => v ?? '—',
-              },
-              { id: 'createdAt', title: 'Sent At', formatter: dateTimeFormatter },
-            ]}
+            headers={merchantEmailLogHeaders}
             data={emailLogs}
           />
         ) : (

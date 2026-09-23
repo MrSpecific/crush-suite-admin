@@ -9,8 +9,10 @@ import { customerEmailTypeMetaData } from '@/lib/metaData';
 import {
   countClubCustomerEmailLogs,
   customerEmailLogHeaders,
+  emailStatusFilterOptions,
   getClubCustomerEmailLogs,
-} from '@/lib/customerEmailLogs';
+  parseEmailStatusFilter,
+} from '@/lib/emailLogs';
 
 export default async function Page(
   props: {
@@ -38,7 +40,7 @@ export default async function Page(
     clubId,
     search: search?.toString(),
     emailType: emailType?.toString(),
-    success: status === 'sent' ? true : status === 'failed' ? false : undefined,
+    success: parseEmailStatusFilter(status),
   };
 
   const count = await countClubCustomerEmailLogs(filters);
@@ -59,10 +61,7 @@ export default async function Page(
     {
       label: 'Status',
       name: 'status',
-      options: [
-        { label: 'Sent', value: 'sent' },
-        { label: 'Failed', value: 'failed' },
-      ],
+      options: emailStatusFilterOptions,
     },
   ];
 
