@@ -2,7 +2,7 @@ import { Badge, Code, Text } from '@radix-ui/themes';
 import { prismaClubs } from '@/lib/prisma-clubs';
 import { Prisma, type CustomerEmailType, type MerchantEmailType } from '@/generated/prisma/clubs';
 import { customerEmailTypeMetaData, merchantEmailTypeMetaData } from '@/lib/metaData';
-import { utcDateTimeFormatter } from '@/lib/formatters';
+import { LocalDateTime } from '@/app/components/LocalDateTime';
 
 export type CustomerEmailLogRow = {
   id: string;
@@ -112,6 +112,8 @@ export const sentBadge = (
   </Badge>
 );
 
+const localDateTimeFormatter = (value: Date) => <LocalDateTime value={value} />;
+
 export const emailStatusFilterOptions = [
   { label: 'Sent', value: 'sent' },
   { label: 'Failed', value: 'failed' },
@@ -142,7 +144,7 @@ export const merchantEmailLogHeaders = [
       v ? sentBadge : failedBadge(row.retryable),
   },
   { id: 'error', title: 'Error', formatter: (v: string | null) => v ?? '—' },
-  { id: 'createdAt', title: 'Sent At (UTC)', formatter: utcDateTimeFormatter },
+  { id: 'createdAt', title: 'Sent At', formatter: localDateTimeFormatter },
 ];
 
 export const customerEmailLogHeaders = [
@@ -169,7 +171,7 @@ export const customerEmailLogHeaders = [
   },
   { id: 'error', title: 'Error', formatter: (v: string | null) => v ?? '—' },
   { id: 'sendCount', title: 'Sends', formatter: (v: number) => v.toString() },
-  { id: 'lastSentAt', title: 'Last Sent (UTC)', formatter: utcDateTimeFormatter },
+  { id: 'lastSentAt', title: 'Last Sent', formatter: localDateTimeFormatter },
 ];
 
 // Email logs are keyed by shop, not merchant id — resolve ids for linking.
