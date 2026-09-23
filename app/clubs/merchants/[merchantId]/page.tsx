@@ -64,6 +64,7 @@ export default async function Page(props: { params: Promise<{ merchantId: string
           merchantId: true,
           name: true,
           status: true,
+          archived: true,
           clubType: true,
           membershipPrice: true,
           createdAt: true,
@@ -73,6 +74,11 @@ export default async function Page(props: { params: Promise<{ merchantId: string
   });
 
   if (!merchant) return <NotFound message="Merchant not found" />;
+
+  // Archived clubs last; otherwise keep newest first
+  const isArchived = (club: { status: string; archived: boolean }) =>
+    club.archived || club.status === 'archived';
+  const clubs = [...merchant.Club].sort((a, b) => Number(isArchived(a)) - Number(isArchived(b)));
 
   const emailLogs = await prismaClubs.merchantEmailLog.findMany({
     where: { shop: merchant.shop },
@@ -270,7 +276,7 @@ export default async function Page(props: { params: Promise<{ merchantId: string
         <Flex justify="between" align="center" mb="3">
           <Heading size="4">Clubs</Heading>
         </Flex>
-        <DataTable headers={clubHeaders} data={merchant.Club} Actions={ClubActions} />
+        <DataTable headers={clubHeaders} data={clubs} Actions={ClubActions} />
       </Box>
 
       <Box>
