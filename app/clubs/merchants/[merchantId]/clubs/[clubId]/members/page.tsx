@@ -104,7 +104,11 @@ export default async function Page(
       title: 'Email',
       href: (_v: string, row: any) => `/clubs/members/${row.customerId}`,
     },
-    { id: 'name', title: 'Name' },
+    {
+      id: 'name',
+      title: 'Name',
+      href: (_v: string, row: any) => `/clubs/members/${row.customerId}`,
+    },
     { id: 'memberNumber', title: 'Member #', formatter: (v: string | null) => v ?? '—' },
     {
       id: 'status',

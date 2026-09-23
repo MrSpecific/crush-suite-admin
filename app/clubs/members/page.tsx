@@ -11,6 +11,8 @@ const Actions = ({ id }: { id: string }) => (
   <ButtonLink href={`/clubs/members/${id}`}>View</ButtonLink>
 );
 
+const memberHref = (_value: unknown, row: { id: string }) => `/clubs/members/${row.id}`;
+
 export default async function Page(props: { searchParams: Promise<PageSearchParams> }) {
   const searchParams = await props.searchParams;
   const { page } = searchParams;
@@ -31,14 +33,16 @@ export default async function Page(props: { searchParams: Promise<PageSearchPara
 
   const headers = [
     {
-      id: 'defaultEmail',
-      title: 'Email',
-    },
-    {
       id: 'firstName',
       title: 'Name',
+      href: memberHref,
       formatter: (_: string, row: any) =>
         [row.firstName, row.lastName].filter(Boolean).join(' ') || '—',
+    },
+    {
+      id: 'defaultEmail',
+      title: 'Email',
+      href: memberHref,
     },
     { id: 'shop', title: 'Shop' },
     {
