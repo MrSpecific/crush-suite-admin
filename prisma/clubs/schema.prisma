@@ -15,7 +15,7 @@ model Merchant {
   status                Status
   // Set true when the worker detects this merchant's offline refresh-token
   // chain is dead (re-auth required). Cleared by the app on next successful
-  // authenticate.admin(). See documentation/expiring-offline-tokens.md (§4.5).
+  // authenticate.admin(). See documentation/plans/expiring-offline-tokens.md (§4.5).
   needsReauth           Boolean                @default(false)
   //
   // ─── Shopify shop profile ─────────────────────────────────────────────────
@@ -23,7 +23,7 @@ model Merchant {
   // the `shop/update` webhook and the daily merchant-sync CRON. Treat as
   // analytics + sensible defaults — do NOT gate business logic on these, with
   // the deliberate exception of `platformEmail` (see below).
-  // Full write-up: documentation/merchant-data-sync.md
+  // Full write-up: documentation/reference/platform/merchant-data-sync.md
   //
   /// Store contact email. NOT purely analytics: this is the To: address for
   /// every merchant email we send, and the fallback support address stamped on
@@ -160,7 +160,7 @@ model AppSession {
   expires             DateTime?
   accessToken         String
   // Expiring offline access tokens (Shopify deprecation): refresh-token rotation.
-  // Null for legacy non-expiring tokens. See documentation/expiring-offline-tokens.md
+  // Null for legacy non-expiring tokens. See documentation/plans/expiring-offline-tokens.md
   refreshToken        String?
   refreshTokenExpires DateTime?
   userId              BigInt?
@@ -210,6 +210,7 @@ model Club {
   platformSellingPlanId             String?
   platformClubLocationId            String? // the inventory source location for this club — defaults to primary fulfillment location if null
   platformCustomerTag               String?              @default("club_member") // tag to add to customers who are members of this club
+  platformOrderTag                  String?
   membershipPrice                   Float                @default(0) // recurring membership fee amount (mirrors Shopify variant price)
   membershipRenewalFrequency        Int                  @default(12) // in months, eg 3 means every 3 months, default is yearly
   estimatedReleaseFrequency         Int                  @default(4)
@@ -282,8 +283,23 @@ model Release {
   billingAttemptsProcessLockId      String? // to prevent concurrent processing of billing attempts
   allReleaseOrdersCreated           Boolean                       @default(false) // set to true when all release orders have been created for this release
   allReleaseOrdersCreatedAt         DateTime? // when the release orders were created
+  // Failure history for bulk release order creation. The CRON re-selects any release with
+  // allReleaseOrdersCreated=false every 3h until releaseDate; these back that retry off
+  // progressively (see releaseOrderRetryDelayMs) and make "how long has this been failing?"
+  // answerable from the DB. Reset to 0/null on success and on merchant reprocess.
+  // Deliberately NOT read by the stuck-release monitor — backing off must never mute alerts.
+  releaseOrdersAttemptCount         Int                           @default(0) // consecutive failed bulk-create attempts
+  releaseOrdersLastAttemptAt        DateTime? // when the last failed attempt finished (null = never attempted)
+  releaseOrdersLastError            String? // last failure message, truncated to 500 chars at write
   contractsGenerated                Boolean                       @default(false) // if the contracts have been generated for this release
   contractsGeneratedAt              DateTime? // when the contracts were generated for this release
+  // Failure history for contract generation, mirroring the releaseOrders* trio above.
+  // Incremented ONLY when the handler's catch fires — never for a healthy run that
+  // simply has more batches to do (100 orders/tick), or the release would be backed
+  // off mid-generation and could miss its release date. See stuck-releases-risks.md §2.3.
+  contractsAttemptCount             Int                           @default(0) // consecutive failed contract-generation attempts
+  contractsLastAttemptAt            DateTime? // when the last failed attempt finished (null = never failed)
+  contractsLastError                String? // last failure message, truncated to 500 chars at write
   contractBulkOperationId           String? // Shopify bulk op GID for in-flight contract creates; reconcile before next batch
   attemptedFirstBillingAt           DateTime? // when we first attempted to bill customers for this release for all release orders
   releaseDate                       DateTime // when the orders should be created
@@ -295,18 +311,18 @@ model Release {
   // "Express", "Economy") — NOT a carrier rate code. Config value + seed for the requested rate at
   // order time; matched against a resolved rate's TITLE (with code as fallback). Carrier-source
   // methods like "Vinoshipper" cannot be pinned this way — see the doc.
-  // See documentation/releases/shipping-rate-identity.md
+  // See documentation/reference/releases/shipping-rate-identity.md
   defaultPlatformShippingMethodName String?
   deliveryMethods                   DeliveryMethod[]              @default([SHIPPING])
   // Allowed shipping method NAMES (same delivery-profile name-space as
   // defaultPlatformShippingMethodName, e.g. "Standard"). Used as a match filter for a member's
-  // preferred rate. See documentation/releases/shipping-rate-identity.md
+  // preferred rate. See documentation/reference/releases/shipping-rate-identity.md
   enabledShippingMethods            String[]                      @default([])
   // Decoupled, FINAL flat shipping PRICE for the release. When set, it overrides the
   // calculated cost on ANY resolved SHIPPING order (not tied to the default method) and
   // shipping discounts do NOT further reduce it. Still needs a rate to resolve (for the
   // contract's shippingOption code/title); SHIPPING-only; 0 = free shipping. Applied via
-  // resolveShippingCharge. See documentation/releases/shipping-rate-identity.md
+  // resolveShippingCharge. See documentation/reference/releases/shipping-rate-identity.md
   shippingFlatRate                  Float?
   allowUPSAccessPointPickup         Boolean                       @default(false) // only available to merchant who have CrushSuite compliance integration. This gets registered as a shipping method on the order
   onlyCheapestShippingRate          Boolean                       @default(true) // when true, only the cheapest non-AP shipping rate is shown to customers (plus AP rates if allowed)
@@ -457,6 +473,24 @@ model ReleaseOrder {
   platformOrderId                   String? // if the order has been created in Shopify
   products                          ReleaseOrderProduct[]
   skippedAt                         DateTime? // if the customer skipped this release, when did they skip. Note this means other data, like the platform contract id should be empty
+  /// The merchant wrote this order off: it will never ship and never bill.
+  ///
+  /// Deliberately **not** `skippedAt`. That column records a *customer*
+  /// decision — it shows the member a "Skipped" badge in their own order
+  /// history, writes "Member skipped release" on their timeline, and feeds
+  /// `getSkipRateForShop`, which drives the Home Skip-rate KPI and the club
+  /// health snapshot. Those are member-disengagement metrics; a merchant
+  /// write-off moving them is a lie about why the member did not receive wine.
+  ///
+  /// This is the only terminal state a merchant can author, and the only one
+  /// that is not derivable from what Shopify holds — hence a stored decision
+  /// rather than another status. See
+  /// `documentation/reference/releases/release-order-lifecycle-actions.md`.
+  closedOutAt                       DateTime?
+  /// Who closed it out (email / user id), for the audit trail.
+  closedOutBy                       String?
+  /// Why. Required by the action — a silent write-off is what this replaces.
+  closedOutReason                   String?
   deliveryPrice                     Float                          @default(0)
   deliveryMethod                    DeliveryMethod                 @default(SHIPPING)
   deliveryAddress                   Json?
@@ -473,10 +507,10 @@ model ReleaseOrder {
   // Resolved rate CODE (e.g. "03:U61302558") → subscription contract shippingOption.code.
   // Contract-critical, not display. Historically has also held rate TITLES/method NAMES (the
   // requested value is preserved before the resolved code), so legacy rows are mixed. For PICKUP
-  // this column is reused to store the pickup location title. See documentation/releases/shipping-rate-identity.md
+  // this column is reused to store the pickup location title. See documentation/reference/releases/shipping-rate-identity.md
   shippingRate                      String?
   // Resolved rate TITLE (e.g. "UPS Ground") → subscription contract shippingOption.title.
-  // Display + contract-critical (Shopify requires it non-blank). See documentation/releases/shipping-rate-identity.md
+  // Display + contract-critical (Shopify requires it non-blank). See documentation/reference/releases/shipping-rate-identity.md
   shippingRateTitle                 String?
   platformPaymentMethodId           String? // eg the payment method ID in Shopify
   complianceFee                     Json? // compliance fee object {[variantId: number]: quantity}
@@ -498,6 +532,11 @@ model ReleaseOrder {
   clubCustomer                      ClubCustomer                   @relation(fields: [clubCustomerId], references: [id], onDelete: Cascade)
   orderProcessingRecords            ReleaseOrderProcessingRecord[]
   /**
+   * Why this order is blocked, one row per distinct cause. `preProcessingError`
+   * records *that* it is blocked; these record *why*. See ReleaseOrderIssue.
+   */
+  issues                            ReleaseOrderIssue[]
+  /**
    * Timestamp of when the order was first surfaced in Highlighted Issues.
    */
   highlightedIssuesListedAt         DateTime?
@@ -505,8 +544,45 @@ model ReleaseOrder {
    * Merchant-controlled triage in Highlighted Issues (defaults OPEN).
    */
   highlightedIssueMerchantState     HighlightedIssueMerchantState  @default(OPEN)
+  refunds                           ReleaseOrderRefund[]
+  refundedAmount                    Float                          @default(0)
+  refundedQuantity                  Int                            @default(0)
+  lastRefundedAt                    DateTime?
 
   @@unique([releaseId, platformCustomerId])
+  /// Refund capture resolves the order by this column on every `refunds/create`
+  /// webhook, which fires for every refund in the store, not just club orders.
+  @@index([platformOrderId])
+}
+
+model ReleaseOrderRefund {
+  id               String                   @id @default(cuid())
+  createdAt        DateTime                 @default(now())
+  updatedAt        DateTime                 @updatedAt
+  releaseOrderId   String
+  releaseOrder     ReleaseOrder             @relation(fields: [releaseOrderId], references: [id], onDelete: Cascade)
+  platformRefundId String                   @unique
+  refundedAt       DateTime
+  amount           Float                    @default(0)
+  currencyCode     String                   @default("USD")
+  note             String?
+  lines            ReleaseOrderRefundLine[]
+
+  @@index([releaseOrderId])
+}
+
+model ReleaseOrderRefundLine {
+  id                 String             @id @default(cuid())
+  createdAt          DateTime           @default(now())
+  refundId           String
+  refund             ReleaseOrderRefund @relation(fields: [refundId], references: [id], onDelete: Cascade)
+  platformLineItemId String
+  platformVariantId  String?
+  title              String?
+  quantity           Int                @default(0)
+  amount             Float              @default(0)
+
+  @@index([refundId])
 }
 
 enum HighlightedIssueMerchantState {
@@ -534,6 +610,104 @@ model ReleaseOrderProcessingRecord {
   errorData                            Json?
   success                              Boolean      @default(false)
   processingAttempt                    Int          @default(1) // incremented each time an attempt is made to process the order
+}
+
+/// Why a release order is blocked — the structured counterpart to the bare
+/// `ReleaseOrder.preProcessingError` boolean.
+///
+/// The flag records *that* an order is held and is what both worker selectors
+/// gate on. It has never recorded *why*: that lived only in the free-text
+/// `notes[]` array, of which the UI rendered at most one line, so the dashboard
+/// had to infer a cause by substring-matching English worker prose. Inference
+/// also means a new failure mode is invisible until someone remembers to add a
+/// clause for it — the root of the visibility gaps in
+/// `documentation/reference/releases/release-order-visibility.md`.
+///
+/// **These rows are now the source of truth, and the flag is their projection.**
+/// `preProcessingError` means "this order has an open `blocksProcessing` issue"
+/// and is recomputed from these rows on every open/resolve/reconcile, in the
+/// same transaction as the write (`projectPreProcessingError`, mirrored in both
+/// packages). Nothing sets it by hand.
+///
+/// That is what fixes #724 by construction rather than by remembering: when a
+/// card arrives and `MISSING_PAYMENT_METHOD` closes, an open
+/// `INCOMPLETE_SHIPPING_DETAILS` keeps the order held, because no path has to
+/// re-validate anything. The flag stays a column because both worker selectors
+/// gate on `preProcessingError: false`, and that indexed test is the query shape
+/// the automation depends on.
+///
+/// One row per (order, code): a recurrence reopens the existing row rather than
+/// appending. Per-attempt history belongs in `ReleaseOrderProcessingRecord`.
+model ReleaseOrderIssue {
+  id               String                        @id @default(cuid())
+  createdAt        DateTime                      @default(now())
+  updatedAt        DateTime                      @updatedAt
+  releaseOrderId   String
+  releaseOrder     ReleaseOrder                  @relation(fields: [releaseOrderId], references: [id], onDelete: Cascade)
+  code             ReleaseOrderIssueCode
+  /// The specifics behind the code — which fields were missing, the upstream
+  /// error message. What `notes[]` was carrying, attached to a cause.
+  detail           String?
+  /// Whether this cause holds the order out of contract generation and billing.
+  /// False for advisory causes that are worth surfacing but do not block.
+  blocksProcessing Boolean                       @default(true)
+  openedAt         DateTime                      @default(now())
+  /// Null while outstanding. Set when the cause is no longer detected.
+  resolvedAt       DateTime?
+  resolvedBy       ReleaseOrderIssueResolvedBy?
+  /// Merchant triage, per **issue** rather than per order — an order blocked for
+  /// two reasons can have one dealt with and one not, which
+  /// `ReleaseOrder.highlightedIssueMerchantState` cannot express.
+  merchantState    HighlightedIssueMerchantState @default(OPEN)
+
+  @@unique([releaseOrderId, code])
+  @@index([releaseOrderId, resolvedAt])
+}
+
+enum ReleaseOrderIssueCode {
+  MISSING_PAYMENT_METHOD
+  MISSING_SHIPPING_RATE
+  SHIPPING_LOOKUP_FAILED
+  /// The live-rate carrier never quoted this address: Shopify answered with only
+  /// its own `backup_rate` prediction, which no carrier has a method for, and the
+  /// escalation ladder in `getShipping` exhausted its retries and CS Compliance.
+  /// Unlike every other shipping cause, nothing about the ORDER is wrong — the
+  /// carrier timed out — so the merchant's repair is "recalculate", not "correct
+  /// the address". See documentation/reference/releases/shipping-rate-identity.md.
+  CARRIER_RATE_UNAVAILABLE
+  INCOMPLETE_SHIPPING_DETAILS
+  MISSING_PHONE
+  MISSING_PICKUP_LOCATION
+  DELIVERY_METHOD_UNAVAILABLE
+  NO_PRODUCTS
+  CUSTOMER_NOT_FOUND
+  MEMBERSHIP_NOT_FOUND
+  CONTRACT_CREATION_FAILED
+  /// A merchant edited the order in the dashboard and the change could not be
+  /// pushed to the live Shopify contract — the dashboard and what the member is
+  /// actually charged now disagree. Advisory (`blocksProcessing: false`): the
+  /// order is still billable, it just bills the pre-edit contract.
+  CONTRACT_SYNC_FAILED
+  /// Billing succeeded but the resulting Shopify order could never be found —
+  /// the webhook carried no `order_id`, its poll gave up, and the reconcile
+  /// sweep then looked for a day and found nothing on the contract.
+  ///
+  /// Advisory (`blocksProcessing: false`): the member was charged, so this must
+  /// never re-enter the order into contract generation or billing. It exists to
+  /// end the sweep, name the cause on Highlighted Issues, and let the dashboard
+  /// offer close-out for a state that otherwise has no action at all.
+  /// See `documentation/reference/releases/stuck-releases-risks.md` §5.1.
+  BILLED_ORDER_NOT_FOUND
+  /// Backfilled onto rows flagged before issues existed, where the cause cannot
+  /// be recovered. Renders as today's generic "Pre-processing checks failed".
+  LEGACY_UNKNOWN
+}
+
+enum ReleaseOrderIssueResolvedBy {
+  /// The cause was no longer detected when the order was re-resolved.
+  SYSTEM
+  /// A merchant action cleared it.
+  MERCHANT
 }
 
 model ReleaseOrderProduct {
@@ -568,6 +742,11 @@ model ClubCustomer {
   UsageBillingRecord UsageBillingRecord[]
 
   @@unique([platformCustomerId, shop])
+  /// Members table: scoped to the shop and ordered by name, with `id` as the
+  /// cursor's tiebreaker. The unique above leads on `platformCustomerId`, so it
+  /// cannot serve a `shop = ?` lookup — without this the list sorts by
+  /// sequential scan, which is what CSC-824 is about avoiding at scale.
+  @@index([shop, firstName, lastName, id])
 }
 
 // Some defaults exist on the customer but having this per-membership allows for different addresses etc per club, necessary for some use cases
@@ -595,6 +774,12 @@ model Membership {
   preferredPickupPlatformLocationId  String? // if pickup, which location ID
   memberNumber                       String? // human-readable membership ID fixed at creation (e.g., "RC-001")
   externalMemberNumber               String? // preserved member number from migration/external system
+  // Which code path created this membership. Written on create ONLY — deliberately
+  // absent from the update branch of `upsertClubCustomerMembership`, because this
+  // records how the membership *originated*: a member who leaves and rejoins through
+  // a different pathway keeps their original value. Null means the row predates this
+  // column (no backfill was attempted).
+  signupSource                       MembershipSignupSource?
   customer                           ClubCustomer              @relation(fields: [customerId], references: [id], onDelete: Cascade)
   customerId                         String
   club                               Club                      @relation(fields: [clubId], references: [id], onDelete: Cascade)
@@ -624,6 +809,20 @@ enum MembershipStatus {
   PAUSED
   LEFT
   PENDING_MIGRATION
+}
+
+/// How a membership was created. See documentation/plans/signup-pathway-parity.md.
+///
+/// POS covers both POS flows: the paid one arrives via `subscription_contracts/create`
+/// like a web checkout and is told apart by the `_crushsuite_signup_source` line-item
+/// property on the origin order, not by which handler ran.
+enum MembershipSignupSource {
+  CHECKOUT // theme PDP → Shopify checkout
+  POS // POS extension, paid or card-less
+  ADMIN // admin dashboard "Add Member" modal
+  ADMIN_DRAFT_ORDER // deprecated draft-order route (still reachable)
+  MIGRATION // CSV member import
+  BUNDLE_CHECKOUT // bundle subscription PDP → checkout
 }
 
 model MembershipBillingRecord {
@@ -679,6 +878,11 @@ enum MembershipEventType {
   REJOINED
   SKIPPED_RELEASE
   UNSKIPPED_RELEASE
+  /// A merchant wrote off the member's order for one release: it will never
+  /// ship and never bill. Distinct from SKIPPED_RELEASE, which records the
+  /// *member* choosing to skip — putting a merchant's decision under that type
+  /// would tell the member they did something they did not do.
+  RELEASE_ORDER_CLOSED_OUT
   CUSTOMIZED
   ORDER_PLACED
   ADDRESS_CHANGED
@@ -692,7 +896,7 @@ enum MembershipEventType {
 enum BundleMode {
   FIXED // merchant pre-selects products
   PICK_AND_MIX // customer chooses from catalog
-  MIGRATED // catch-all per-club marker for migrated subscribers whose configs don't match any merchant-curated FIXED/PICK_AND_MIX type. Per-customer data lives entirely on BundleSubscription + BundleSelectionSnapshot. See documentation/bundle-subscriptions/migration.md.
+  MIGRATED // catch-all per-club marker for migrated subscribers whose configs don't match any merchant-curated FIXED/PICK_AND_MIX type. Per-customer data lives entirely on BundleSubscription + BundleSelectionSnapshot. See documentation/reference/bundle-subscriptions/migration.md.
 }
 
 enum BundleTypeStatus {
@@ -928,7 +1132,8 @@ model BundleOrder {
   /// Result of the per-cycle prepurchase compliance check. `true` =
   /// passed, `false` = failed (errors pushed to `notes`, billing still
   /// proceeded), `null` = check skipped (no DOB on file, Compliance app
-  /// not installed, or `Club.addComplianceProducts` disabled).
+  /// not installed, or no shipping address). Runs whether or not
+  /// `Club.addComplianceProducts` is on — that setting governs the fee only.
   complianceCheckValid     Boolean?
   total                    Float              @default(0)
   currencyCode             String             @default("USD")
@@ -1099,6 +1304,9 @@ model MerchantEmailLog {
   dedupKey  String
   sentTo    String
   success   Boolean           @default(true)
+  /// Set on failed sends: false = permanent (4xx) — do not re-attempt on CRON.
+  /// null on successful sends.
+  retryable Boolean?
   error     String?
   metadata  Json?
 
@@ -1157,6 +1365,9 @@ model CustomerEmailLog {
   dedupKey   String
   sentTo     String
   success    Boolean           @default(true)
+  /// Set on failed sends: false = permanent (4xx) — CRON must not re-mail forever.
+  /// null on successful sends. Transient failures stay retryable: true.
+  retryable  Boolean?
   error      String?
   metadata   Json?
 
@@ -1227,7 +1438,6 @@ model ClubMigration {
   useExistingShopifyPaymentMethod Boolean @default(false)
   gatewayType                     String? // "stripe" | "braintree" | "authorize_net" — only if CSV has gateway tokens
   gracePeriodDays                 Int     @default(0)
-  sendWelcomeEmails               Boolean @default(false)
 
   // File tracking
   filename String? // original CSV filename for display
@@ -1236,6 +1446,48 @@ model ClubMigration {
   workerJobId String?
   completedAt DateTime?
   error       String?
+
+  // ─── Payment method retry ───────────────────────────────────────────
+  // A merchant whose gateway connection was unfinished has every imported card
+  // rejected. Once they finish connecting it the tokens are still good, so the
+  // fix is to run the payment stage again — no new CSV involved.
+  //
+  // The lock lives here rather than relying on a deterministic BullMQ jobId:
+  // completed jobs are retained, so a repeated id would silently refuse a
+  // legitimate *second* retry days later. See OPEN-ITEMS row 46, which records
+  // the same trap. Being in the database is also what lets the progress UI
+  // survive a page reload — the lock is read from the loader, not held in
+  // component state.
+  /// Set while a retry is queued or running; cleared on completion or failure.
+  paymentRetryJobId     String?
+  /// Staleness marker, so a lock orphaned by a dead worker can be identified.
+  /// Nothing reads it, so the lock above cannot expire — see issue #922.
+  paymentRetryStartedAt DateTime?
+
+  // ─── Resumable pipeline ─────────────────────────────────────────────
+  // The import runs as a chain of short steps, each doing one batch and
+  // enqueuing the next, so a redeploy costs one batch instead of the whole
+  // import. These columns are what make re-entry safe and self-limiting.
+  //
+  // Progress itself is NOT here: every record already carries the stage it
+  // reached (`ClubMigrationRecord.status`), which is what a resumed run reads
+  // to know where to pick up. See
+  // documentation/plans/migration-interruption-resilience.md.
+
+  /// `{uuid}::{timestamp}` — stops a second step running against this migration
+  /// while one is live. Self-expiring by design: the timestamp is *in* the
+  /// value, so a process dying between set and clear cannot wedge the import
+  /// the way `paymentRetryJobId` above can. Window is minutes, not the release
+  /// pipeline's two hours — a step is one batch. See `~/util/processLock`.
+  processLockId String?
+  /// Consecutive *failures*, reset on any step that does work. Drives the
+  /// retry backoff so a migration failing for a real reason (a revoked access
+  /// token, a club with no product) backs off instead of re-running forever.
+  attemptCount  Int       @default(0)
+  lastAttemptAt DateTime?
+  /// Last step failure, for the dashboard and for support. Distinct from
+  /// `error`, which records the terminal failure of the whole migration.
+  lastError     String?
 
   records ClubMigrationRecord[]
 
@@ -1272,7 +1524,7 @@ model ClubMigrationRecord {
   gatewayPaymentToken     String?
 
   // ─── Bundle migration fields (bundle-subscription clubs only) ──────
-  // See documentation/bundle-subscriptions/migration.md.
+  // See documentation/reference/bundle-subscriptions/migration.md.
   /// Customer's per-line selections from the CSV: [{variantId, quantity, price}].
   /// Required (or `shopifyContractId`) for bundle-club rows.
   bundleSelections  Json?
@@ -1325,16 +1577,46 @@ model ClubMigrationRecord {
   paymentEmailSentAt    DateTime?
   paymentEmailSendCount Int       @default(0)
   contractCreated       Boolean   @default(false)
-  welcomeEmailSent      Boolean   @default(false)
+
+  // ─── Payment method verification ───────────────────────────────────
+  // `customerPaymentMethodRemoteCreate` returns a placeholder synchronously and
+  // validates against the gateway *afterwards*, so `platformPaymentMethodId`
+  // alone proves nothing — a rejected card and a good one look identical at the
+  // moment Phase 4 records them. These columns hold the outcome once it is
+  // known. See documentation/plans/migration-payment-method-verification.md.
+
+  /// Null for records that never imported a remote card (no gateway token, or an
+  /// existing Shopify card, which is vaulted already and needs no verification).
+  paymentVerificationState PaymentVerificationState?
+  paymentVerifiedAt        DateTime?
+  paymentVerifyAttempts    Int                       @default(0)
+  /// Shopify's payment instrument type — `CustomerRemoteCreditCard` is an
+  /// unvaulted placeholder, `CustomerCreditCard` a real card. Stored rather than
+  /// inferred so the native-vs-remote distinction rests on evidence.
+  paymentInstrumentType    String?
+  /// A `CustomerPaymentMethodRevocationReason` value. **Not** carried by the
+  /// revoke webhook — that payload is the create payload echoed back — so it is
+  /// fetched from the Admin API, which needs `showRevoked: true` or it returns
+  /// null for a revoked method.
+  paymentRevokedReason     String?
 
   // Error tracking
   error      String?
   errorPhase String? // "validation" | "customer_resolve" | "membership_create" | "payment_resolve" | "contract_create"
 
   @@unique([migrationId, email])
-  @@index([migrationId])
-  @@index([migrationId, status])
+  /// `[migrationId]` alone was a strict prefix of the composites below and could
+  /// never be chosen over them — pure insert cost on a table written up to
+  /// MAX_IMPORT_ROWS at a time. `rowNumber` is appended to the status index so
+  /// the filtered tabs get their sort from the index too, not just `all`.
+  @@index([migrationId, status, rowNumber])
+  /// The detail table's default order, for the unfiltered tab. See CSC-826.
+  @@index([migrationId, rowNumber])
   @@index([platformCustomerId])
+  // Member detail resolves migration deep-links by membershipId, and a migration
+  // writes one row per imported member — so a multi-thousand-member onboarding
+  // makes the unindexed lookup a real seq-scan.
+  @@index([membershipId])
 }
 
 enum MigrationStatus {
@@ -1365,6 +1647,17 @@ enum CustomerResolution {
   CREATED // new customer created via customerCreate
 }
 
+/// Outcome of Shopify's asynchronous validation of a gateway-imported payment
+/// method. Deliberately a separate axis from `MigrationRecordStatus`, which
+/// tracks pipeline *phase* progress — `PAYMENT_RESOLVED` keeps meaning "Phase 4
+/// ran", not "the card is good".
+enum PaymentVerificationState {
+  PENDING // placeholder created; Shopify has not finished validating it
+  VERIFIED // instrument populated — a real, usable card
+  REVOKED // Shopify rejected it; see paymentRevokedReason
+  UNVERIFIED // never resolved before we stopped waiting
+}
+
 // ─── GDPR ───────────────────────────────────────────────────────────
 
 model GDPRRequest {
@@ -1392,7 +1685,7 @@ model GDPRRequest {
 /// behalf. One row per fee ever owed, written by the call site at the moment it
 /// enqueues (never by the job — a job that never runs must still leave evidence).
 /// Doubles as the internal revenue record and as the input to the reconciliation
-/// CRON. See documentation/stuck-releases-risks.md §4 D1.
+/// CRON. See documentation/reference/releases/stuck-releases-risks.md §4 D1.
 model UsageBillingRecord {
   id        String   @id @default(cuid())
   createdAt DateTime @default(now())
@@ -1468,7 +1761,7 @@ enum UsageBillingStatus {
 /// `triggeredBy` is shop-level, not per-user: it derives from
 /// `session.onlineAccessInfo.associated_user`, but the app does not enable
 /// online tokens, so it always falls back to the shop domain.
-/// See documentation/releases/manual-reprocess.md §Audit.
+/// See documentation/reference/releases/manual-reprocess.md §Audit.
 model ReleaseReprocessLog {
   id        String   @id @default(cuid())
   createdAt DateTime @default(now())

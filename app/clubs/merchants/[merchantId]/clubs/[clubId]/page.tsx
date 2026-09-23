@@ -7,6 +7,7 @@ import { Badge, Box, Card, Flex, Grid, Heading, Text } from '@radix-ui/themes';
 import { clubStatusFormatter, clubTypeFormatter, dateFormatter } from '@/lib/formatters';
 import { ButtonLink } from '@/app/components/ButtonLink';
 import type { RadixColor } from '@/types/radix-ui';
+import { customerEmailLogHeaders, getClubCustomerEmailLogs } from '@/lib/customerEmailLogs';
 
 const releaseStatusColor: Record<string, RadixColor> = {
   draft: 'gray',
@@ -113,6 +114,12 @@ export default async function Page(
   }, {});
 
   const totalSubscriptions = subscriptionStatusGroups.reduce((sum, g) => sum + g._count._all, 0);
+
+  const memberEmailLogs = await getClubCustomerEmailLogs({
+    shop: club.merchant.shop,
+    clubId,
+    take: 10,
+  });
 
   const releaseBasePath = `/clubs/merchants/${merchantId}/clubs/${clubId}/releases`;
 
@@ -249,6 +256,25 @@ export default async function Page(
         ) : (
           <Text color="gray" size="2">
             No releases yet.
+          </Text>
+        )}
+      </Box>
+      <Box mb="6">
+        <Flex justify="between" align="center" mb="3">
+          <Heading size="4">Recent Member Emails</Heading>
+          <ButtonLink
+            href={`/clubs/merchants/${merchantId}/clubs/${clubId}/member-emails`}
+            variant="soft"
+            size="1"
+          >
+            View All
+          </ButtonLink>
+        </Flex>
+        {memberEmailLogs.length > 0 ? (
+          <DataTable headers={customerEmailLogHeaders} data={memberEmailLogs} />
+        ) : (
+          <Text color="gray" size="2">
+            No member emails for this club.
           </Text>
         )}
       </Box>

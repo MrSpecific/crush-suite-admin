@@ -4,6 +4,7 @@ import { DOMElement } from 'react';
 import type {
   ClubStatus,
   ClubType,
+  CustomerEmailType,
   Status as ClubsMerchantStatus,
   MerchantEmailType,
   UsageBillingSource,
@@ -110,6 +111,22 @@ export const merchantEmailTypeMetaData: Record<MerchantEmailType, EnumMetaData> 
   MEMBER_CANCELLED: { label: 'Member Cancelled', color: 'gray' },
   PAYMENT_FAILED_ALERT: { label: 'Payment Failed Alert', color: 'red' },
   RECONNECT_STORE: { label: 'Reconnect Store', color: 'orange' },
+};
+
+export const customerEmailTypeMetaData: Record<CustomerEmailType, EnumMetaData> = {
+  MEMBER_WELCOME: { label: 'Member Welcome', color: 'green' },
+  MEMBERSHIP_PAUSED: { label: 'Membership Paused', color: 'yellow' },
+  MEMBERSHIP_RESUMED: { label: 'Membership Resumed', color: 'green' },
+  MEMBERSHIP_CANCELLED: { label: 'Membership Cancelled', color: 'gray' },
+  CUSTOMIZATION_OPEN: { label: 'Customization Open', color: 'blue' },
+  CUSTOMIZATION_REMINDER_72HR: { label: 'Customization Reminder (72hr)', color: 'orange' },
+  CUSTOMIZATION_REMINDER_24HR: { label: 'Customization Reminder (24hr)', color: 'orange' },
+  CUSTOMIZATION_CONFIRMED: { label: 'Customization Confirmed', color: 'teal' },
+  ORDER_PROCESSING_NOTICE: { label: 'Order Processing', color: 'purple' },
+  PAYMENT_SUCCESSFUL: { label: 'Payment Successful', color: 'green' },
+  PAYMENT_FAILED: { label: 'Payment Failed', color: 'red' },
+  CARD_EXPIRING_SOON: { label: 'Card Expiring Soon', color: 'orange' },
+  POS_ADD_PAYMENT: { label: 'POS Add Payment', color: 'iris' },
 };
 
 export const usageBillingStatusMetaData: Record<UsageBillingStatus, EnumMetaData> = {
