@@ -2,7 +2,7 @@ import { Badge, Code, Text } from '@radix-ui/themes';
 import { prismaClubs } from '@/lib/prisma-clubs';
 import { Prisma, type CustomerEmailType, type MerchantEmailType } from '@/generated/prisma/clubs';
 import { customerEmailTypeMetaData, merchantEmailTypeMetaData } from '@/lib/metaData';
-import { dateTimeFormatter } from '@/lib/formatters';
+import { utcDateTimeFormatter } from '@/lib/formatters';
 
 export type CustomerEmailLogRow = {
   id: string;
@@ -142,7 +142,7 @@ export const merchantEmailLogHeaders = [
       v ? sentBadge : failedBadge(row.retryable),
   },
   { id: 'error', title: 'Error', formatter: (v: string | null) => v ?? '—' },
-  { id: 'createdAt', title: 'Sent At', formatter: dateTimeFormatter },
+  { id: 'createdAt', title: 'Sent At (UTC)', formatter: utcDateTimeFormatter },
 ];
 
 export const customerEmailLogHeaders = [
@@ -169,7 +169,7 @@ export const customerEmailLogHeaders = [
   },
   { id: 'error', title: 'Error', formatter: (v: string | null) => v ?? '—' },
   { id: 'sendCount', title: 'Sends', formatter: (v: number) => v.toString() },
-  { id: 'lastSentAt', title: 'Last Sent', formatter: dateTimeFormatter },
+  { id: 'lastSentAt', title: 'Last Sent (UTC)', formatter: utcDateTimeFormatter },
 ];
 
 // Email logs are keyed by shop, not merchant id — resolve ids for linking.

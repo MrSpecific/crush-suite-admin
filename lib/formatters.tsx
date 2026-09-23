@@ -10,6 +10,15 @@ export const dateFormatter = (value: Date) => (value ? value.toLocaleDateString(
 export const dateTimeFormatter = (value: Date) =>
   value ? `${value.toLocaleDateString()} ${value.toLocaleTimeString()}` : '';
 
+const utcDateTimeFormat = new Intl.DateTimeFormat('en-US', {
+  dateStyle: 'medium',
+  timeStyle: 'long',
+  timeZone: 'UTC',
+});
+
+// Pinned to UTC and labelled, since server-rendered times otherwise depend on the host's timezone.
+export const utcDateTimeFormatter = (value: Date) => (value ? utcDateTimeFormat.format(value) : '');
+
 export const merchantFormatter = (value: any) => (
   <Box>
     <Link href={`/merchants/${value.id}`}>

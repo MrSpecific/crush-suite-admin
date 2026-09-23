@@ -3,7 +3,7 @@ import { PageLayout } from '@/app/components/PageLayout';
 import { QuickDataList } from '@/app/components/QuickDataList';
 import { NotFound } from '@/app/components/NotFound';
 import { Badge, Card, Grid, Heading } from '@radix-ui/themes';
-import { dateTimeFormatter } from '@/lib/formatters';
+import { utcDateTimeFormatter } from '@/lib/formatters';
 import { merchantEmailTypeMetaData } from '@/lib/metaData';
 import { EmailMetadata, failedBadge, sentBadge } from '@/lib/emailLogs';
 
@@ -61,7 +61,7 @@ export default async function Page(props: { params: Promise<{ id: string }> }) {
                   : log.shop,
                 linkTo: merchant ? `/clubs/merchants/${merchant.id}` : undefined,
               },
-              { label: 'Sent At', value: dateTimeFormatter(log.createdAt) },
+              { label: 'Sent At', value: utcDateTimeFormatter(log.createdAt) },
               {
                 label: 'Retryable',
                 value: log.retryable == null ? undefined : log.retryable ? 'Yes' : 'No',
