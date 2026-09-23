@@ -14,6 +14,8 @@ const Actions = ({ id }: { id: number }) => (
   <ButtonLink href={`/clubs/merchants/${id}`}>View</ButtonLink>
 );
 
+const merchantHref = (_value: string, row: { id: number }) => `/clubs/merchants/${row.id}`;
+
 export default async function Page(props: { searchParams: Promise<PageSearchParams> }) {
   const searchParams = await props.searchParams;
   const { page, search } = searchParams;
@@ -35,14 +37,16 @@ export default async function Page(props: { searchParams: Promise<PageSearchPara
   });
 
   const headers = [
-    { id: 'shop', title: 'Shop' },
-    { id: 'platformShopName', title: 'Name' },
+    { id: 'platformShopName', title: 'Name', href: merchantHref },
+    { id: 'shop', title: 'Shop', href: merchantHref },
     { id: 'platformEmail', title: 'Email' },
     {
       id: 'status',
       title: 'Status',
       formatter: (value: string) => {
-        const meta = clubsMerchantStatusMetaData[value as keyof typeof clubsMerchantStatusMetaData] ?? { label: value, color: 'gray' };
+        const meta = clubsMerchantStatusMetaData[
+          value as keyof typeof clubsMerchantStatusMetaData
+        ] ?? { label: value, color: 'gray' };
         return <Badge color={meta.color}>{meta.label}</Badge>;
       },
     },
