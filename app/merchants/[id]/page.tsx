@@ -21,11 +21,12 @@ import {
 } from '@/lib/formatters';
 import { ButtonLink } from '@/app/components/ButtonLink';
 import { OrderTableActions, getOrderTableHeaders } from '@/app/orders/orderTable';
+import { type AppSubscription, type AppSubscriptionLineItem } from '@/lib/shopify';
+import { diagnoseBilling, loadBillingFacts } from '@/lib/billingDiagnosis';
 import {
-  getShopifyAppBilling,
-  type AppSubscription,
-  type AppSubscriptionLineItem,
-} from '@/lib/shopify';
+  BillingHealthCard,
+  subscriptionStatusColor,
+} from '@/app/merchants/[id]/BillingHealthCard';
 
 const productsTake = 10;
 const ordersTake = 20;
@@ -189,10 +190,12 @@ export default async function Page(
     orders: monthlyBillingOrders,
   });
 
-  const shopifyBillingLookup = await getShopifyBillingLookup({
-    shop: data.shop,
-    accessToken: data.accessToken,
-  });
+  const billingFacts = await loadBillingFacts(data);
+  const billingDiagnosis = diagnoseBilling(billingFacts);
+  const shopifyBillingLookup: ShopifyBillingLookup = {
+    subscriptions: billingFacts.active,
+    error: billingFacts.error,
+  };
 
   return (
     <PageLayout
@@ -326,6 +329,12 @@ export default async function Page(
         billingSummary={billingSummary}
         platformBillingId={data.platformBillingId}
         platformBillingStatus={data.platformBillingStatus}
+      />
+
+      <BillingHealthCard
+        merchantId={merchantId}
+        facts={billingFacts}
+        diagnosis={billingDiagnosis}
       />
 
       <ShopifyBillingCard lookup={shopifyBillingLookup} />
@@ -524,40 +533,6 @@ const MerchantEvents = ({ events, merchantId }: { events: any; merchantId: any }
 type ShopifyBillingLookup = {
   subscriptions: AppSubscription[];
   error?: string;
-};
-
-const getShopifyBillingLookup = async ({
-  shop,
-  accessToken,
-}: {
-  shop?: string | null;
-  accessToken?: string | null;
-}): Promise<ShopifyBillingLookup> => {
-  if (!shop) return { subscriptions: [], error: 'No shop stored for this merchant.' };
-  if (!accessToken) return { subscriptions: [], error: 'No access token stored for this merchant.' };
-
-  try {
-    const subscriptions = await getShopifyAppBilling({ shop, accessToken });
-    return { subscriptions };
-  } catch (err) {
-    return {
-      subscriptions: [],
-      error: err instanceof Error ? err.message : 'Unable to load Shopify billing information.',
-    };
-  }
-};
-
-const subscriptionStatusColor = (status: string): any => {
-  switch (status) {
-    case 'ACTIVE': return 'green';
-    case 'PENDING':
-    case 'ACCEPTED': return 'yellow';
-    case 'FROZEN': return 'orange';
-    case 'DECLINED':
-    case 'CANCELLED':
-    case 'EXPIRED': return 'red';
-    default: return 'gray';
-  }
 };
 
 const ShopifyBillingCard = ({ lookup }: { lookup: ShopifyBillingLookup }) => {

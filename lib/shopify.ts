@@ -435,3 +435,104 @@ export async function getShopifyAppBilling({
 
   return data.currentAppInstallation.activeSubscriptions;
 }
+
+// ─── App Billing: any status ─────────────────────────────────────────────────
+//
+// activeSubscriptions only ever returns ACTIVE subscriptions, so a charge the
+// merchant never approved (or declined, or that expired) is invisible there.
+// These look subscriptions up regardless of status, which is what billing
+// diagnosis needs.
+
+export type AppSubscriptionSummary = {
+  id: string;
+  name: string;
+  status: string;
+  createdAt: string;
+  test: boolean;
+};
+
+const APP_SUBSCRIPTION_SUMMARY_FIELDS = /* GraphQL */ `
+  id
+  name
+  status
+  createdAt
+  test
+`;
+
+const SHOPIFY_APP_SUBSCRIPTION_QUERY = /* GraphQL */ `
+  query CrushSuiteAdminAppSubscription($id: ID!) {
+    node(id: $id) {
+      ... on AppSubscription {
+        ${APP_SUBSCRIPTION_SUMMARY_FIELDS}
+      }
+    }
+  }
+`;
+
+const SHOPIFY_RECENT_APP_SUBSCRIPTIONS_QUERY = /* GraphQL */ `
+  query CrushSuiteAdminRecentAppSubscriptions($first: Int!) {
+    currentAppInstallation {
+      allSubscriptions(first: $first, sortKey: CREATED_AT, reverse: true) {
+        nodes {
+          ${APP_SUBSCRIPTION_SUMMARY_FIELDS}
+        }
+      }
+    }
+  }
+`;
+
+/** One subscription by id, or null when Shopify has no such subscription. */
+export async function getShopifyAppSubscriptionById({
+  shop,
+  accessToken,
+  subscriptionId,
+}: {
+  shop: string;
+  accessToken: string;
+  subscriptionId: string;
+}): Promise<AppSubscriptionSummary | null> {
+  const data = await shopifyAdminGraphql<
+    { node: AppSubscriptionSummary | Record<string, never> | null },
+    { id: string }
+  >({
+    shop,
+    accessToken,
+    query: SHOPIFY_APP_SUBSCRIPTION_QUERY,
+    variables: { id: toShopifyAppSubscriptionGid(subscriptionId) },
+  });
+
+  const node = data.node;
+  return node && 'id' in node ? (node as AppSubscriptionSummary) : null;
+}
+
+/** The most recently created subscriptions for the shop, newest first. */
+export async function getShopifyRecentAppSubscriptions({
+  shop,
+  accessToken,
+  first = 5,
+}: {
+  shop: string;
+  accessToken: string;
+  first?: number;
+}): Promise<AppSubscriptionSummary[]> {
+  const data = await shopifyAdminGraphql<
+    { currentAppInstallation: { allSubscriptions: { nodes: AppSubscriptionSummary[] } } },
+    { first: number }
+  >({
+    shop,
+    accessToken,
+    query: SHOPIFY_RECENT_APP_SUBSCRIPTIONS_QUERY,
+    variables: { first },
+  });
+
+  return data.currentAppInstallation.allSubscriptions.nodes;
+}
+
+/** The web app stores the gid appSubscriptionCreate returns; older rows may hold the bare id. */
+export function toShopifyAppSubscriptionGid(subscriptionId: string) {
+  if (subscriptionId.startsWith('gid://shopify/AppSubscription/')) {
+    return subscriptionId;
+  }
+
+  return `gid://shopify/AppSubscription/${subscriptionId}`;
+}
