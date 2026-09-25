@@ -1,4 +1,4 @@
-import { Badge, Box, Callout, Card, Flex, Heading, Text } from '@radix-ui/themes';
+import { Badge, Box, Callout, Card, Code, Flex, Heading, Text } from '@radix-ui/themes';
 import {
   CheckCircledIcon,
   CrossCircledIcon,
@@ -7,7 +7,7 @@ import {
 } from '@radix-ui/react-icons';
 import { DataTable } from '@/app/components/DataTable';
 import { QuickDataList } from '@/app/components/QuickDataList';
-import { dateTimeFormatter } from '@/lib/formatters';
+import { LocalDateTime } from '@/app/components/LocalDateTime';
 import {
   sameSubscription,
   type BillingDiagnosis,
@@ -15,6 +15,57 @@ import {
   type BillingState,
 } from '@/lib/billingDiagnosis';
 import { RepairBillingButton } from '@/app/merchants/[id]/RepairBillingButton';
+import { Link } from '@/app/components/Link';
+import { formatMoney, type AppSubscriptionDiscount } from '@/lib/shopify';
+import type { SubscriptionDiscount } from '@prisma/client';
+
+// The web app turns any charge made with this discount into a Shopify test charge.
+const TEST_CHARGE_DISCOUNT = 'FREE FOR TESTING';
+
+const shopifyDiscountFormatter = (discount: AppSubscriptionDiscount | null) => {
+  if (!discount) return '—';
+
+  const duration =
+    discount.durationLimitInIntervals == null
+      ? 'forever'
+      : `${discount.remainingDurationInIntervals ?? 0} of ${discount.durationLimitInIntervals} periods left`;
+
+  return (
+    <Flex direction="column">
+      <Text size="2">
+        {discount.label} → {formatMoney(discount.priceAfterDiscount)}
+      </Text>
+      <Text size="1" color="gray">
+        {duration}
+      </Text>
+    </Flex>
+  );
+};
+
+const discountOnRecord = (discount: SubscriptionDiscount | null) => {
+  if (!discount) return 'None';
+
+  const amount =
+    discount.discountPercent > 0
+      ? `${Math.round(discount.discountPercent * 100)}% off`
+      : `$${discount.discountFixed.toFixed(2)} off`;
+
+  return (
+    <Flex gap="2" align="center" wrap="wrap">
+      <Link href={`/discounts/${discount.id}`}>
+        <Code>{discount.value}</Code>
+      </Link>
+      <Text size="2">
+        {discount.description} · {amount} · {discount.durationIntervals} periods
+      </Text>
+      {discount.description === TEST_CHARGE_DISCOUNT && (
+        <Badge color="gray" variant="outline">
+          Makes test charges
+        </Badge>
+      )}
+    </Flex>
+  );
+};
 
 const stateStyle: Record<BillingState, { color: any; Icon: typeof InfoCircledIcon }> = {
   healthy: { color: 'green', Icon: CheckCircledIcon },
@@ -61,10 +112,13 @@ export const BillingHealthCard = ({
   merchantId,
   facts,
   diagnosis,
+  subscriptionDiscount,
 }: {
   merchantId: number;
   facts: BillingFacts;
   diagnosis: BillingDiagnosis;
+  /** The discount the web app saved with the merchant's latest plan selection. */
+  subscriptionDiscount: SubscriptionDiscount | null;
 }) => {
   const { color, Icon } = stateStyle[diagnosis.state];
   const { stored, recent, platformBillingId, platformBillingStatus } = facts;
@@ -85,7 +139,11 @@ export const BillingHealthCard = ({
       <QuickDataList
         data={[
           { label: 'Merchant Sees', value: diagnosis.merchantSees },
-          { label: 'Stored Billing ID', value: platformBillingId ?? 'None', clipboard: !!platformBillingId },
+          {
+            label: 'Stored Billing ID',
+            value: platformBillingId ?? 'None',
+            clipboard: !!platformBillingId,
+          },
           { label: 'Stored Billing Status', value: platformBillingStatus ?? 'None', badge: true },
           {
             label: 'Stored Charge in Shopify',
@@ -99,7 +157,13 @@ export const BillingHealthCard = ({
           },
           {
             label: 'Stored Charge Created',
-            value: stored ? dateTimeFormatter(new Date(stored.createdAt)) : undefined,
+            children: stored ? <LocalDateTime value={new Date(stored.createdAt)} /> : undefined,
+          },
+          {
+            label: 'Discount on Record',
+            children: discountOnRecord(subscriptionDiscount),
+            tooltip:
+              'Saved with the latest plan selection and replaced on every new one. Earlier discounts show per subscription below.',
           },
         ]}
       />
@@ -118,9 +182,14 @@ export const BillingHealthCard = ({
                 formatter: (v: string, row) => <StatusBadge status={v} test={row.test} />,
               },
               {
+                id: 'discount',
+                title: 'Discount',
+                formatter: shopifyDiscountFormatter,
+              },
+              {
                 id: 'createdAt',
                 title: 'Created',
-                formatter: (v: string) => dateTimeFormatter(new Date(v)),
+                formatter: (v: string) => <LocalDateTime value={new Date(v)} />,
               },
               {
                 id: 'id',

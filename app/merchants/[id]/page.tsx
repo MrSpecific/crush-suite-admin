@@ -134,6 +134,7 @@ export default async function Page(
     },
     include: {
       billingPlan: true,
+      subscriptionDiscount: true,
       ShipCompliantSyncJob: {
         orderBy: { createdAt: 'desc' },
         take: 5,
@@ -335,6 +336,7 @@ export default async function Page(
         merchantId={merchantId}
         facts={billingFacts}
         diagnosis={billingDiagnosis}
+        subscriptionDiscount={data.subscriptionDiscount}
       />
 
       <ShopifyBillingCard lookup={shopifyBillingLookup} />

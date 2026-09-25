@@ -11,10 +11,16 @@ type ShopifyGraphqlResponse<TData> = {
   errors?: ShopifyGraphqlError[];
 };
 
-type Money = {
+export type Money = {
   amount: string;
   currencyCode: string;
 };
+
+export function formatMoney({ amount, currencyCode }: Money) {
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: currencyCode }).format(
+    Number(amount)
+  );
+}
 
 type MoneySet = {
   shopMoney: Money;
@@ -443,12 +449,40 @@ export async function getShopifyAppBilling({
 // These look subscriptions up regardless of status, which is what billing
 // diagnosis needs.
 
+export type AppSubscriptionDiscount = {
+  /** e.g. "100% off" or "$20.00 off" */
+  label: string;
+  priceAfterDiscount: Money;
+  durationLimitInIntervals: number | null;
+  remainingDurationInIntervals: number | null;
+};
+
 export type AppSubscriptionSummary = {
   id: string;
   name: string;
   status: string;
   createdAt: string;
   test: boolean;
+  /** The discount on the recurring line item, if one was applied at creation. */
+  discount: AppSubscriptionDiscount | null;
+};
+
+type AppSubscriptionSummaryNode = Omit<AppSubscriptionSummary, 'discount'> & {
+  lineItems: {
+    plan: {
+      pricingDetails: {
+        __typename: string;
+        discount?: {
+          durationLimitInIntervals: number | null;
+          remainingDurationInIntervals: number | null;
+          priceAfterDiscount: Money;
+          value:
+            | { __typename: 'AppSubscriptionDiscountAmount'; amount: Money }
+            | { __typename: 'AppSubscriptionDiscountPercentage'; percentage: number };
+        } | null;
+      };
+    };
+  }[];
 };
 
 const APP_SUBSCRIPTION_SUMMARY_FIELDS = /* GraphQL */ `
@@ -457,7 +491,57 @@ const APP_SUBSCRIPTION_SUMMARY_FIELDS = /* GraphQL */ `
   status
   createdAt
   test
+  lineItems {
+    plan {
+      pricingDetails {
+        __typename
+        ... on AppRecurringPricing {
+          discount {
+            durationLimitInIntervals
+            remainingDurationInIntervals
+            priceAfterDiscount {
+              amount
+              currencyCode
+            }
+            value {
+              __typename
+              ... on AppSubscriptionDiscountAmount {
+                amount {
+                  amount
+                  currencyCode
+                }
+              }
+              ... on AppSubscriptionDiscountPercentage {
+                percentage
+              }
+            }
+          }
+        }
+      }
+    }
+  }
 `;
+
+function toAppSubscriptionSummary({ lineItems, ...node }: AppSubscriptionSummaryNode) {
+  const discount = lineItems.find(
+    (item) => item.plan.pricingDetails.__typename === 'AppRecurringPricing'
+  )?.plan.pricingDetails.discount;
+
+  return {
+    ...node,
+    discount: discount
+      ? {
+          label:
+            discount.value.__typename === 'AppSubscriptionDiscountPercentage'
+              ? `${Math.round(discount.value.percentage * 100)}% off`
+              : `${formatMoney(discount.value.amount)} off`,
+          priceAfterDiscount: discount.priceAfterDiscount,
+          durationLimitInIntervals: discount.durationLimitInIntervals,
+          remainingDurationInIntervals: discount.remainingDurationInIntervals,
+        }
+      : null,
+  } satisfies AppSubscriptionSummary;
+}
 
 const SHOPIFY_APP_SUBSCRIPTION_QUERY = /* GraphQL */ `
   query CrushSuiteAdminAppSubscription($id: ID!) {
@@ -492,7 +576,7 @@ export async function getShopifyAppSubscriptionById({
   subscriptionId: string;
 }): Promise<AppSubscriptionSummary | null> {
   const data = await shopifyAdminGraphql<
-    { node: AppSubscriptionSummary | Record<string, never> | null },
+    { node: AppSubscriptionSummaryNode | Record<string, never> | null },
     { id: string }
   >({
     shop,
@@ -502,7 +586,7 @@ export async function getShopifyAppSubscriptionById({
   });
 
   const node = data.node;
-  return node && 'id' in node ? (node as AppSubscriptionSummary) : null;
+  return node && 'id' in node ? toAppSubscriptionSummary(node as AppSubscriptionSummaryNode) : null;
 }
 
 /** The most recently created subscriptions for the shop, newest first. */
@@ -516,7 +600,7 @@ export async function getShopifyRecentAppSubscriptions({
   first?: number;
 }): Promise<AppSubscriptionSummary[]> {
   const data = await shopifyAdminGraphql<
-    { currentAppInstallation: { allSubscriptions: { nodes: AppSubscriptionSummary[] } } },
+    { currentAppInstallation: { allSubscriptions: { nodes: AppSubscriptionSummaryNode[] } } },
     { first: number }
   >({
     shop,
@@ -525,7 +609,7 @@ export async function getShopifyRecentAppSubscriptions({
     variables: { first },
   });
 
-  return data.currentAppInstallation.allSubscriptions.nodes;
+  return data.currentAppInstallation.allSubscriptions.nodes.map(toAppSubscriptionSummary);
 }
 
 /** The web app stores the gid appSubscriptionCreate returns; older rows may hold the bare id. */
