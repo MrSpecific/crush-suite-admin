@@ -20,9 +20,17 @@ export type SelectDataFilter = {
   placeholder?: string;
 };
 
-export const DataFilter = ({ filters = [] }: { filters?: SelectDataFilter[] }) => {
+export const DataFilter = ({
+  filters = [],
+  action,
+}: {
+  filters?: SelectDataFilter[];
+  // Path to navigate to with the filters applied; defaults to the current page
+  action?: string;
+}) => {
   const { push } = useRouter();
-  const pathname = usePathname();
+  const currentPathname = usePathname();
+  const pathname = action ?? currentPathname;
   const searchParams = useSearchParams();
   const params = new URLSearchParams(searchParams.toString());
   const currentSearch = params.get('search') || '';

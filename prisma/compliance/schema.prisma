@@ -195,6 +195,16 @@ model Customer {
   merchantId                  Int
   dob                         DateTime?
   dobEncrypted                String?
+  // Set once this customer's DOB has been written to Shopify's standard
+  // `facts.birth_date` metafield. Null means "not yet migrated" and is what the
+  // backfill selects on; the order-sync write path stamps it too, so newly
+  // created customers never enter the backfill queue. See #874.
+  dobMetafieldSyncedAt        DateTime?
+  // Failed attempts to write `facts.birth_date` for this customer. The backfill
+  // excludes rows past a cap so one un-writable customer (deleted in Shopify,
+  // undecryptable DOB) can't sit at the head of the batch query forever and
+  // stall every customer behind it.
+  dobMetafieldSyncAttempts    Int               @default(0)
   email                       String
   phoneNumber                 String?
   usesPhoneNumberAsPrimary    Boolean           @default(false)
@@ -209,6 +219,7 @@ model Customer {
   @@unique([email, shop])
   @@index([shop])
   @@index([platformCustomerId, platform])
+  @@index([merchantId, dobMetafieldSyncedAt])
 }
 
 model Order {
@@ -254,7 +265,82 @@ model Order {
   merchant                           Merchant          @relation(fields: [merchantId], references: [id])
   Fulfillment                        Fulfillment[]
 
+  VinoshipperOrderReconciliation VinoshipperOrderReconciliation[]
+
   @@index([compliancePartner, compliancePartnerLastPolledAt]) // supports SC fulfillment-polling cron rotation
+}
+
+/// Snapshot of how the merchant's collections compared with what Vinoshipper
+/// charges them, taken each time we sync an order.
+///
+/// Purely analytical: nothing reads it during order processing, and a failed
+/// capture must never affect the order. It exists because Shopify and
+/// Vinoshipper disagree by design — Shopify assesses its own sales tax and
+/// charges its own shipping, Vinoshipper bills the merchant its own figures
+/// plus a platform fee, and the compliance fee is what stands between the two.
+/// Without a record, whether a merchant is covered is invisible.
+///
+/// Deliberately Vinoshipper-shaped, hence the name. `amountDue`, a platform
+/// fee and a shipping mark-up are VS's settlement model, not concepts every
+/// compliance provider has — ShipCompliant determines tax and does not bill
+/// the merchant at all. When a second provider is actually wired we will have
+/// two real shapes to generalise from; inventing a shared base around one
+/// real and one imagined shape would fit neither.
+///
+/// One row per sync event rather than per order: an amended order re-submits
+/// and gets fresh figures, and watching the gap move is the point.
+model VinoshipperOrderReconciliation {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now())
+
+  orderId   Int
+  order     Order              @relation(fields: [orderId], references: [id])
+  eventType OrderSyncEventType
+
+  /// What Shopify charged the buyer.
+  customerTotal          Float
+  customerSalesTax       Float
+  customerShipping       Float
+  /// The compliance fee line, price x quantity. Recorded as one figure and
+  /// never decomposed: with VS it offsets a mix of the sales-tax gap, state
+  /// fees and part of the platform fee (which already contains alcohol tax),
+  /// so any breakdown we stored would be a fiction.
+  complianceFeeCollected Float
+
+  /// What we put on the create-order payload.
+  submittedTaxes Float
+  submittedFees  Float
+
+  /// What Vinoshipper charges the merchant, from `platformCharges`. Stored as
+  /// positive liabilities — VS states them as negative charges.
+  ///
+  /// Null means the response carried no platformCharges block, which is not
+  /// the same as 0: writing 0 would read as "VS billed nothing".
+  vsSalesTax         Float?
+  vsShippingHandling Float?
+  vsPlatformFee      Float?
+  vsStateFees        Float?
+  /// Everything in `amountDue` the four lines above don't account for —
+  /// pickPackFee, creditCardFee, taxExcise, the fundsReceived credit, and any
+  /// field VS adds later. Normally 0; a non-zero value means the enumerated
+  /// breakdown is incomplete and is worth looking at.
+  vsOtherCharges     Float?
+  /// VS's own total. Authoritative, not derived — this is what the merchant
+  /// is invoiced, and it already contains anything we failed to enumerate.
+  vsAmountDue        Float?
+
+  /// VS's own arithmetic on what we submitted (`taxesAdjusted` /
+  /// `extraFeesAdjusted`). Derivable from the figures above, kept as a
+  /// cross-check on our reading of the response.
+  vsTaxesAdjusted Float?
+  vsFeesAdjusted  Float?
+
+  @@index([orderId, createdAt])
+}
+
+enum OrderSyncEventType {
+  CREATE
+  UPDATE
 }
 
 /// Captures every incoming order webhook before any business logic runs.

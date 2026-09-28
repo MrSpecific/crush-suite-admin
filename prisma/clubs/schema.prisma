@@ -883,6 +883,10 @@ enum MembershipEventType {
   /// *member* choosing to skip — putting a merchant's decision under that type
   /// would tell the member they did something they did not do.
   RELEASE_ORDER_CLOSED_OUT
+  /// A merchant set up the member's order for one release from the dashboard
+  /// ("Initialize to edit"), ahead of or instead of bulk creation. Recorded so a
+  /// merchant-initialised order is never inferred from timestamps or notes.
+  RELEASE_ORDER_INITIALIZED
   CUSTOMIZED
   ORDER_PLACED
   ADDRESS_CHANGED
@@ -1464,6 +1468,17 @@ model ClubMigration {
   /// Nothing reads it, so the lock above cannot expire — see issue #922.
   paymentRetryStartedAt DateTime?
 
+  // ─── DOB sync ───────────────────────────────────────────────────────
+  // Re-pushes the migration's dates of birth to the Compliance app. Phase 3
+  // does this once and never fails the record over it, so any failure of that
+  // step (an outage, a wrong host, the Compliance app installed later) is
+  // otherwise unrecoverable. Same lock shape as the payment retry, and the
+  // same trap: nothing expires it.
+  /// Set while a sync is queued or running; cleared on completion or failure.
+  dobSyncJobId     String?
+  /// Staleness marker only.
+  dobSyncStartedAt DateTime?
+
   // ─── Resumable pipeline ─────────────────────────────────────────────
   // The import runs as a chain of short steps, each doing one batch and
   // enqueuing the next, so a redeploy costs one batch instead of the whole
@@ -1520,6 +1535,16 @@ model ClubMigrationRecord {
   preferredDeliveryMethod DeliveryMethod?
   notes                   String?
   dateOfBirth             String? // AES-encrypted DOB (PII)
+  /// When the DOB above last reached the Compliance app: `setCustomerDob`
+  /// answered success, which it also does when Compliance already held one.
+  /// Null alongside a `dateOfBirth` means the merchant supplied a DOB that
+  /// Compliance does not have — the one state the dashboard treats as an
+  /// issue. A row with no `dateOfBirth` is "not provided", never a problem.
+  /// Written by Phase 3 and by the DOB sync job.
+  dobSyncedAt             DateTime?
+  /// Last push failure, status first (`404 Not Found: Customer not found`,
+  /// `401 …`). Cleared on success.
+  dobSyncError            String?
   gatewayCustomerToken    String?
   gatewayPaymentToken     String?
 

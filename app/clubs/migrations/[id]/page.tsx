@@ -40,9 +40,15 @@ export default async function Page(
   const searchParams = await props.searchParams;
   const params = await props.params;
   const { page } = searchParams;
-  const recordCount = await prismaClubs.clubMigrationRecord.count({
-    where: { migrationId: params.id },
-  });
+  const [recordCount, dobIssueCount] = await Promise.all([
+    prismaClubs.clubMigrationRecord.count({
+      where: { migrationId: params.id },
+    }),
+    // A supplied DOB that never reached Compliance; rows without a DOB are "not provided"
+    prismaClubs.clubMigrationRecord.count({
+      where: { migrationId: params.id, dateOfBirth: { not: null }, dobSyncedAt: null },
+    }),
+  ]);
 
   const migration = await prismaClubs.clubMigration.findUnique({
     where: { id: params.id },
@@ -64,6 +70,8 @@ export default async function Page(
       sendWelcomeEmails: true,
       filename: true,
       workerJobId: true,
+      dobSyncJobId: true,
+      dobSyncStartedAt: true,
       completedAt: true,
       error: true,
       club: { select: { id: true, name: true, merchantId: true } },
@@ -72,7 +80,7 @@ export default async function Page(
 
   if (!migration) return <NotFound message="Migration not found" />;
 
-  const records = await prismaClubs.clubMigrationRecord.findMany({
+  const recordRows = await prismaClubs.clubMigrationRecord.findMany({
     ...queryPagination({ page, count: recordCount }),
     where: { migrationId: params.id },
     orderBy: { rowNumber: 'asc' },
@@ -92,8 +100,17 @@ export default async function Page(
       paymentEmailSendCount: true,
       contractCreated: true,
       welcomeEmailSent: true,
+      dateOfBirth: true,
+      dobSyncedAt: true,
+      dobSyncError: true,
     },
   });
+
+  // Only whether a DOB was supplied matters here; keep the encrypted value out of the rows
+  const records = recordRows.map(({ dateOfBirth, ...record }) => ({
+    ...record,
+    hasDob: dateOfBirth != null,
+  }));
 
   const pctComplete =
     migration.totalRecords > 0
@@ -138,6 +155,20 @@ export default async function Page(
       formatter: (v: boolean) => (v ? <Badge color="green" variant="soft" size="1">Created</Badge> : '—'),
     },
     {
+      id: 'dobSyncedAt',
+      title: 'DOB',
+      formatter: (v: Date | null, row: any) =>
+        !row.hasDob ? (
+          '—'
+        ) : v ? (
+          <Badge color="green" variant="soft" size="1" title={dateTimeFormatter(v)}>Synced</Badge>
+        ) : (
+          <Badge color="red" variant="soft" size="1" title={row.dobSyncError ?? undefined}>
+            Not Synced
+          </Badge>
+        ),
+    },
+    {
       id: 'error',
       title: 'Error',
       formatter: (v: string | null, row: any) =>
@@ -180,6 +211,16 @@ export default async function Page(
               { label: 'Shop', value: migration.shop },
               { label: 'File', value: migration.filename },
               { label: 'Worker Job', value: migration.workerJobId, as: 'code' },
+              {
+                label: 'DOB Sync Job',
+                value: migration.dobSyncJobId,
+                as: 'code',
+                tooltip: 'Set while a DOB sync to the Compliance app is queued or running. Nothing expires this lock, so a job that died leaves it set.',
+              },
+              {
+                label: 'DOB Sync Started',
+                value: migration.dobSyncStartedAt ? dateTimeFormatter(migration.dobSyncStartedAt) : undefined,
+              },
               { label: 'Started', value: dateFormatter(migration.createdAt) },
               {
                 label: 'Completed',
@@ -209,6 +250,13 @@ export default async function Page(
                   label: 'Errors',
                   children: migration.errorCount > 0
                     ? <Badge color="red" variant="soft">{migration.errorCount}</Badge>
+                    : <Text size="2">0</Text>,
+                },
+                {
+                  label: 'DOB Not Synced',
+                  tooltip: 'Records with a supplied date of birth that the Compliance app does not have.',
+                  children: dobIssueCount > 0
+                    ? <Badge color="red" variant="soft">{dobIssueCount}</Badge>
                     : <Text size="2">0</Text>,
                 },
               ]}

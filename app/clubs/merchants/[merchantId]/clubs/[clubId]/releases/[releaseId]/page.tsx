@@ -13,7 +13,24 @@ import { NotFound } from '@/app/components/NotFound';
 import { ButtonLink } from '@/app/components/ButtonLink';
 import { Badge, Box, Card, Flex, Grid, Heading, Text } from '@radix-ui/themes';
 import { dateFormatter, dateTimeFormatter } from '@/lib/formatters';
+import { DataFilter } from '@/app/components/DataFilter';
 import type { RadixColor } from '@/types/radix-ui';
+import {
+  getMembersWithoutOrderWhere,
+  memberWithoutOrderHeaders,
+  MemberWithoutOrderActions,
+  memberWithoutOrderSelect,
+  releaseOrderHeaders,
+  ReleaseOrderActions,
+  releaseOrderSelect,
+  releasePath,
+  getReleaseOrderWhere,
+  toMemberWithoutOrderRows,
+  toReleaseOrderRows,
+} from './releaseLists';
+
+// Rows shown per list on this page; the full lists are paginated on their own pages
+const previewTake = 20;
 
 const statusColor: Record<string, RadixColor> = {
   published: 'green',
@@ -141,59 +158,24 @@ export default async function Page(
     return <NotFound message="Release not found" />;
   }
 
+  const basePath = releasePath(merchantId, clubId, releaseId);
   const releaseOrders = await prismaClubs.releaseOrder.findMany({
-    where: { releaseId },
+    where: getReleaseOrderWhere(releaseId),
     orderBy: { createdAt: 'desc' },
-    take: 100,
-    select: {
-      id: true,
-      platformCustomerId: true,
-      platformOrderId: true,
-      orderCreatedAt: true,
-      skippedAt: true,
-      deliveryMethod: true,
-      subtotal: true,
-      discountAmount: true,
-      deliveryPrice: true,
-      createdAt: true,
-      clubCustomer: {
-        select: { defaultEmail: true, firstName: true, lastName: true },
-      },
-    },
+    take: previewTake,
+    select: releaseOrderSelect,
   });
 
-  // Active members who belong to this release cycle but have no order for it yet
-  const membersWithoutOrderWhere = {
-    clubId,
-    status: 'ACTIVE' as const,
-    joinedAt: { lt: release.releaseDate },
-    customer: { ReleaseOrder: { none: { releaseId } } },
-  };
-
+  const membersWithoutOrderWhere = getMembersWithoutOrderWhere(release);
   const [membersWithoutOrder, membersWithoutOrderCount] = await Promise.all([
     prismaClubs.membership.findMany({
       where: membersWithoutOrderWhere,
       orderBy: { joinedAt: 'asc' },
-      take: 100,
-      select: {
-        id: true,
-        memberNumber: true,
-        joinedAt: true,
-        customer: {
-          select: { id: true, platformCustomerId: true, defaultEmail: true, firstName: true, lastName: true },
-        },
-      },
+      take: previewTake,
+      select: memberWithoutOrderSelect,
     }),
     prismaClubs.membership.count({ where: membersWithoutOrderWhere }),
   ]);
-
-  const memberWithoutOrderRows = membersWithoutOrder.map((membership) => ({
-    ...membership,
-    customerEmail: membership.customer.defaultEmail,
-    customerName: [membership.customer.firstName, membership.customer.lastName].filter(Boolean).join(' ') || '—',
-    platformCustomerId: membership.customer.platformCustomerId,
-    customerId: membership.customer.id,
-  }));
 
   // Product names come from Shopify; the compliance catalog (when synced) provides the detail page
   const shop = release.club.merchant.shop;
@@ -227,12 +209,6 @@ export default async function Page(
           : getShopifyAdminProductUrl(shop, product.platformProductId),
       };
     });
-
-  const orderRows = releaseOrders.map((order) => ({
-    ...order,
-    customerEmail: order.clubCustomer.defaultEmail,
-    customerName: [order.clubCustomer.firstName, order.clubCustomer.lastName].filter(Boolean).join(' ') || '—',
-  }));
 
   const productHeaders = [
     {
@@ -504,62 +480,29 @@ export default async function Page(
 
       {/* Release Orders */}
       <Box>
-        <Heading size="4" mb="3">
-          Orders ({release._count.ReleaseOrder})
-        </Heading>
-        {orderRows.length > 0 ? (
-          <DataTable
-            headers={[
-              {
-                id: 'customerEmail',
-                title: 'Email',
-                href: (_v: string, row: any) =>
-                  `/clubs/merchants/${merchantId}/clubs/${clubId}/releases/${releaseId}/orders/${row.id}`,
-              },
-              { id: 'customerName', title: 'Name' },
-              {
-                id: 'skippedAt',
-                title: 'Status',
-                formatter: (skippedAt: Date | null, row: any) => {
-                  if (skippedAt) return <Badge color="gray" variant="soft">Skipped</Badge>;
-                  if (row.platformOrderId) return <Badge color="green" variant="soft">Ordered</Badge>;
-                  return <Badge color="orange" variant="soft">Pending</Badge>;
-                },
-              },
-              { id: 'platformOrderId', title: 'Order ID', as: 'code' as const },
-              { id: 'deliveryMethod', title: 'Delivery' },
-              {
-                id: 'subtotal',
-                title: 'Subtotal',
-                formatter: (v: number) => `$${v.toFixed(2)}`,
-              },
-              {
-                id: 'discountAmount',
-                title: 'Discount',
-                formatter: (v: number) => (v > 0 ? `-$${v.toFixed(2)}` : '—'),
-              },
-              {
-                id: 'deliveryPrice',
-                title: 'Shipping',
-                formatter: (v: number) => (v > 0 ? `$${v.toFixed(2)}` : '—'),
-              },
-              { id: 'orderCreatedAt', title: 'Ordered At', formatter: (v: Date | null) => v ? dateTimeFormatter(v) : '—' },
-              { id: 'createdAt', title: 'Created', formatter: dateFormatter },
-              { type: 'actions' as const, title: 'Actions' },
-            ]}
-            data={orderRows}
-            Actions={({ id }: { id: string }) => (
-              <ButtonLink href={`/clubs/merchants/${merchantId}/clubs/${clubId}/releases/${releaseId}/orders/${id}`}>
-                View
-              </ButtonLink>
-            )}
-          />
+        <Flex justify="between" align="center" mb="3">
+          <Heading size="4">Orders ({release._count.ReleaseOrder})</Heading>
+          {release._count.ReleaseOrder > previewTake && (
+            <ButtonLink href={`${basePath}/orders`} variant="soft">
+              View all
+            </ButtonLink>
+          )}
+        </Flex>
+        {releaseOrders.length > 0 ? (
+          <>
+            <DataFilter action={`${basePath}/orders`} />
+            <DataTable
+              headers={releaseOrderHeaders}
+              data={toReleaseOrderRows(releaseOrders, basePath)}
+              Actions={ReleaseOrderActions}
+            />
+          </>
         ) : (
           <Text color="gray" size="2">No orders for this release yet.</Text>
         )}
-        {release._count.ReleaseOrder > 100 && (
+        {release._count.ReleaseOrder > previewTake && (
           <Text size="1" color="gray" mt="2" as="p">
-            Showing first 100 of {release._count.ReleaseOrder} orders.
+            Showing latest {previewTake} of {release._count.ReleaseOrder} orders.
           </Text>
         )}
       </Box>
@@ -567,33 +510,25 @@ export default async function Page(
       {/* Members without an order */}
       {membersWithoutOrderCount > 0 && (
         <Box mt="6">
-          <Heading size="4" mb="3">
-            Not Yet Customized ({membersWithoutOrderCount})
-          </Heading>
+          <Flex justify="between" align="center" mb="3">
+            <Heading size="4">Not Yet Customized ({membersWithoutOrderCount})</Heading>
+            {membersWithoutOrderCount > previewTake && (
+              <ButtonLink href={`${basePath}/not-customized`} variant="soft">
+                View all
+              </ButtonLink>
+            )}
+          </Flex>
           <Text as="p" size="2" color="gray" mb="3">
             Active members who have not customized or been given an order for this release.
           </Text>
           <DataTable
-            headers={[
-              {
-                id: 'customerEmail',
-                title: 'Email',
-                href: (_v: string, row: any) => `/clubs/members/${row.customerId}`,
-              },
-              { id: 'customerName', title: 'Name' },
-              { id: 'memberNumber', title: 'Member #', formatter: (v: string | null) => v ?? '—' },
-              { id: 'platformCustomerId', title: 'Customer ID', as: 'code' as const },
-              { id: 'joinedAt', title: 'Joined', formatter: dateFormatter },
-              { type: 'actions' as const, title: 'Actions' },
-            ]}
-            data={memberWithoutOrderRows}
-            Actions={({ customerId }: { customerId: string }) => (
-              <ButtonLink href={`/clubs/members/${customerId}`}>View</ButtonLink>
-            )}
+            headers={memberWithoutOrderHeaders}
+            data={toMemberWithoutOrderRows(membersWithoutOrder)}
+            Actions={MemberWithoutOrderActions}
           />
-          {membersWithoutOrderCount > 100 && (
+          {membersWithoutOrderCount > previewTake && (
             <Text size="1" color="gray" mt="2" as="p">
-              Showing first 100 of {membersWithoutOrderCount} members.
+              Showing first {previewTake} of {membersWithoutOrderCount} members.
             </Text>
           )}
         </Box>
@@ -601,3 +536,4 @@ export default async function Page(
     </PageLayout>
   );
 }
+
