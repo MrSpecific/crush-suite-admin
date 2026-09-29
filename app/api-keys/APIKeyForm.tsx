@@ -90,10 +90,23 @@ export const APIKeyForm = ({
           />
           <FormField
             name="limit"
-            label="Limit"
+            label="Rate Limit (requests per minute)"
+            description={
+              <>
+                Most requests this key can make per minute. Anything over the limit gets a 429
+                with a Retry-After header until the minute resets.
+                <br />
+                <strong>Suggested:</strong> 60 for most integrations, 120–300 for a headless
+                storefront calling live rates or compliance checks at checkout. For reference,
+                our internal app-to-app traffic gets 600.
+              </>
+            }
             defaultValue={apiKey?.limit ?? 60}
             type="number"
+            min={1}
+            step={1}
             required
+            messages={{ valueMissing: 'Rate limit is required' }}
           />
           <ComboboxInput
             name="merchantId"

@@ -2,6 +2,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { clsx } from 'clsx';
 import * as Form from '@radix-ui/react-form';
+import { Popover as PopoverPrimitive } from 'radix-ui';
 import { Popover, Text } from '@radix-ui/themes';
 import fieldCss from './FormField.module.css';
 import css from './ComboboxInput.module.css';
@@ -108,7 +109,8 @@ export const ComboboxInput = ({
       <FormLabel label={label} name={name} required={required} htmlFor={searchName} />
       <input type="hidden" name={name} value={selected?.value ?? ''} />
       <Popover.Root open={open} onOpenChange={setOpen}>
-        <Popover.Anchor ref={anchorRef}>
+        {/* Themes' Popover.Anchor drops its children (v3.3.0), so use the primitive directly */}
+        <PopoverPrimitive.Anchor ref={anchorRef}>
           <Form.Control asChild>
             <input
               id={searchName}
@@ -140,7 +142,7 @@ export const ComboboxInput = ({
               onKeyDown={handleKeyDown}
             />
           </Form.Control>
-        </Popover.Anchor>
+        </PopoverPrimitive.Anchor>
         {/* Portalled so the list isn't clipped by overflow-hidden parents like Card */}
         <Popover.Content
           size="1"

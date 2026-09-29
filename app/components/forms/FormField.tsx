@@ -11,7 +11,7 @@ export type FormFieldProps = {
   id?: string;
   name: string;
   label?: string;
-  description?: string;
+  description?: React.ReactNode;
   placeholder?: string;
   defaultValue?: string | number;
   type?: InputTypes;
