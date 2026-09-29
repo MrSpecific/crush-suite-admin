@@ -9,6 +9,7 @@ import { upsertAPIKey, UpsertAPIKeyProps } from '@/app/api-keys/server/upsertAPI
 import { FormWarning } from '../components/FormWarning';
 import { FormLabel } from '../components/forms/FormLabel';
 import { apiKeyScopes } from './scopes';
+import { GeneratedKeyField } from './GeneratedKeyField';
 
 export const APIKeyForm = ({
   apiKey = null,
@@ -72,21 +73,21 @@ export const APIKeyForm = ({
         <input type="hidden" name="id" value={apiKey?.id} />
 
         <Flex direction="column" gap="2">
-          <FormField
+          <GeneratedKeyField
             name="privateKey"
             label="Private Key"
+            prefix="cs_live_"
             defaultValue={apiKey?.privateKey}
-            type="text"
             required
             messages={{ valueMissing: 'Private Key is required' }}
           />
-          <FormField
+          <GeneratedKeyField
             name="sandboxKey"
             label="Sandbox Key"
+            prefix="cs_sandbox_"
             defaultValue={apiKey?.sandboxKey}
-            type="text"
             required
-            messages={{ valueMissing: 'Value is required' }}
+            messages={{ valueMissing: 'Sandbox Key is required' }}
           />
           <FormField
             name="limit"
