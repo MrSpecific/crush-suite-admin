@@ -22,6 +22,8 @@ export const upsertAPIKey = async ({
   if (!authorize({ session, role: 'ADMIN' }).authorized)
     return { success: false, message: 'Not Authorized' };
 
+  if (!scopes?.length) return { success: false, message: 'At least one scope is required' };
+
   const sharedProps = {
     privateKey,
     sandboxKey,

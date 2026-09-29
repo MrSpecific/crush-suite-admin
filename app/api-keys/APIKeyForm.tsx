@@ -4,7 +4,6 @@ import { useRouter } from 'next/navigation';
 import * as Form from '@radix-ui/react-form';
 import { Box, Button, Grid, CheckboxGroup, Flex } from '@radix-ui/themes';
 import { ComboboxInput, FormField, type ComboboxOption } from '@/app/components/forms';
-import { LoadingSkeleton } from '@/app/components/LoadingSkeleton';
 import { upsertAPIKey, UpsertAPIKeyProps } from '@/app/api-keys/server/upsertAPIKey';
 import { FormWarning } from '../components/FormWarning';
 import { FormLabel } from '../components/forms/FormLabel';
@@ -27,20 +26,35 @@ export const APIKeyForm = ({
   const [errorMessage, setErrorMessage] = useState('');
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    setformState('loading');
     event.preventDefault();
+    if (formState === 'loading') return;
+    setformState('loading');
 
     const formData = new FormData(event.currentTarget);
 
     const data = Object.fromEntries(formData) as unknown as UpsertAPIKeyProps;
+    const scopes = formData.getAll('scopes') as string[];
 
-    const result = await upsertAPIKey({
-      ...data,
-      id: data.id || undefined,
-      limit: Number(formData.get('limit')),
-      merchantId: Number(formData.get('merchantId')),
-      scopes: formData.getAll('scopes') as string[],
-    });
+    // Validated here rather than with `required`, which Radix applies to every checkbox
+    if (scopes.length === 0) {
+      setformState('error');
+      setErrorMessage('At least one scope is required');
+      return { success: false, message: 'At least one scope is required' };
+    }
+
+    let result;
+    try {
+      result = await upsertAPIKey({
+        ...data,
+        id: data.id || undefined,
+        limit: Number(formData.get('limit')),
+        merchantId: Number(formData.get('merchantId')),
+        scopes,
+      });
+    } catch (error) {
+      console.error(error);
+      result = { success: false, message: 'Error saving API Key. Please try again.' };
+    }
 
     if (!result.success) {
       setformState('error');
@@ -59,17 +73,11 @@ export const APIKeyForm = ({
     return result;
   };
 
-  if (formState === 'loading') return <LoadingSkeleton />;
-
   return (
     <>
       {formState === 'error' && <FormWarning variant="error">{errorMessage}</FormWarning>}
-      <Form.Root
-        onSubmit={async (event) => {
-          const result = await handleSubmit(event);
-          onComplete(result);
-        }}
-      >
+      {/* Kept mounted while saving so entered values survive a failed save */}
+      <Form.Root onSubmit={handleSubmit}>
         <input type="hidden" name="id" value={apiKey?.id} />
 
         <Flex direction="column" gap="2">
@@ -120,12 +128,7 @@ export const APIKeyForm = ({
           />
 
           <FormLabel label="Scopes" required>
-            <CheckboxGroup.Root
-              name="scopes"
-              defaultValue={apiKey?.scopes ?? []}
-              required
-              // messages={{ valueMissing: 'At least one scope is required' }}
-            >
+            <CheckboxGroup.Root name="scopes" defaultValue={apiKey?.scopes ?? []}>
               {apiKeyScopes.map(({ value, label }) => (
                 <CheckboxGroup.Item key={value} value={value}>
                   {label}
@@ -140,7 +143,7 @@ export const APIKeyForm = ({
         </Grid> */}
 
         <Form.Submit asChild>
-          <Button mt="3" size="3">
+          <Button mt="3" size="3" loading={formState === 'loading'}>
             Save API Key
           </Button>
         </Form.Submit>
