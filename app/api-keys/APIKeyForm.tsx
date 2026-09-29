@@ -76,7 +76,7 @@ export const APIKeyForm = ({
           <GeneratedKeyField
             name="privateKey"
             label="Private Key"
-            prefix="cs_live_"
+            prefix="pk_"
             defaultValue={apiKey?.privateKey}
             required
             messages={{ valueMissing: 'Private Key is required' }}
@@ -84,7 +84,7 @@ export const APIKeyForm = ({
           <GeneratedKeyField
             name="sandboxKey"
             label="Sandbox Key"
-            prefix="cs_sandbox_"
+            prefix="sk_"
             defaultValue={apiKey?.sandboxKey}
             required
             messages={{ valueMissing: 'Sandbox Key is required' }}

@@ -6,7 +6,6 @@ import { queryPagination } from '@/lib/queryPagination';
 import {
   dateFormatter,
   issuesFormatter,
-  merchantFormatter,
   orderLinkFormatter,
   currencyFormatterWithDecimals,
 } from '@/lib/formatters';
@@ -38,7 +37,18 @@ export default async function Page(props: { searchParams: Promise<PageSearchPara
   const headers: DataHeaders = [
     { type: 'data', title: 'Data' },
     // { id: 'id', title: 'ID', formatter: orderLinkFormatter },
-    { id: 'merchant', title: 'Merchant', formatter: merchantFormatter },
+    {
+      id: 'merchant',
+      title: 'Merchant',
+      formatter: (merchant, row) => (
+        <Link href={`/api-keys/${row.id}`}>
+          <Text as="div" weight="bold">
+            {merchant.compliancePartnerAccountName || merchant.platformShopName || merchant.shop}
+          </Text>
+          {merchant.shop}
+        </Link>
+      ),
+    },
     { id: 'createdAt', title: 'Created At', formatter: dateFormatter },
     { id: 'updatedAt', title: 'Updated At', formatter: dateFormatter },
     // { id: 'platform', title: 'Platform' },
