@@ -3,18 +3,21 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import * as Form from '@radix-ui/react-form';
 import { Box, Button, Grid, CheckboxGroup, Flex } from '@radix-ui/themes';
-import { FormField } from '@/app/components/forms';
+import { ComboboxInput, FormField, type ComboboxOption } from '@/app/components/forms';
 import { LoadingSkeleton } from '@/app/components/LoadingSkeleton';
 import { upsertAPIKey, UpsertAPIKeyProps } from '@/app/api-keys/server/upsertAPIKey';
 import { FormWarning } from '../components/FormWarning';
 import { FormLabel } from '../components/forms/FormLabel';
+import { apiKeyScopes } from './scopes';
 
 export const APIKeyForm = ({
   apiKey = null,
+  merchantOptions,
   onComplete = () => {},
   after,
 }: {
   apiKey?: any;
+  merchantOptions: ComboboxOption[];
   onComplete?: Function;
   after?: string;
 }) => {
@@ -30,7 +33,13 @@ export const APIKeyForm = ({
 
     const data = Object.fromEntries(formData) as unknown as UpsertAPIKeyProps;
 
-    const result = await upsertAPIKey({ ...data });
+    const result = await upsertAPIKey({
+      ...data,
+      id: data.id || undefined,
+      limit: Number(formData.get('limit')),
+      merchantId: Number(formData.get('merchantId')),
+      scopes: formData.getAll('scopes') as string[],
+    });
 
     if (!result.success) {
       setformState('error');
@@ -74,7 +83,7 @@ export const APIKeyForm = ({
           <FormField
             name="sandboxKey"
             label="Sandbox Key"
-            defaultValue={apiKey?.value}
+            defaultValue={apiKey?.sandboxKey}
             type="text"
             required
             messages={{ valueMissing: 'Value is required' }}
@@ -86,12 +95,14 @@ export const APIKeyForm = ({
             type="number"
             required
           />
-          <FormField
+          <ComboboxInput
             name="merchantId"
-            label="Merchant ID"
+            label="Merchant"
+            options={merchantOptions}
             defaultValue={apiKey?.merchantId}
-            type="number"
+            placeholder="Search by name, shop, or ID"
             required
+            messages={{ valueMissing: 'Merchant is required' }}
           />
 
           <FormLabel label="Scopes" required>
@@ -101,8 +112,11 @@ export const APIKeyForm = ({
               required
               // messages={{ valueMissing: 'At least one scope is required' }}
             >
-              <CheckboxGroup.Item value="read:products">Read Products</CheckboxGroup.Item>
-              <CheckboxGroup.Item value="write:products">Write Products</CheckboxGroup.Item>
+              {apiKeyScopes.map(({ value, label }) => (
+                <CheckboxGroup.Item key={value} value={value}>
+                  {label}
+                </CheckboxGroup.Item>
+              ))}
             </CheckboxGroup.Root>
           </FormLabel>
         </Flex>

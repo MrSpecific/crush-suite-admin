@@ -3,3 +3,4 @@ export * from './FormField';
 export * from './SelectInput';
 export * from './SubmitButton';
 export * from './StringArrayInput';
+export * from './ComboboxInput';
