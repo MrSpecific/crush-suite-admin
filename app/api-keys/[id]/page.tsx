@@ -10,6 +10,7 @@ import { ButtonLink } from '@/app/components/ButtonLink';
 import { dateFormatter } from '@/lib/formatters';
 import { RadixColor } from '@/types/radix-ui';
 import { apiKeyScopeLabel } from '../scopes';
+import { TestAPIKeyButton } from '../TestAPIKeyButton';
 
 const merchantStatusColors: Record<Status, RadixColor> = {
   READY: 'green',
@@ -90,6 +91,7 @@ export default async function Page(props: { params: Promise<{ id: string }> }) {
               { label: 'Updated At', children: <LocalDateTime value={data.updatedAt} /> },
             ]}
           />
+          <TestAPIKeyButton id={id} />
         </Card>
         <Card>
           <Heading size="3" mb="3">
