@@ -6,6 +6,7 @@ import type { VinoshipperProfile } from './types/merchant';
 import type { VinoshipperOrder } from './types/order';
 import type { VinoshipperProductFeed, VinoshipperProductFeedProduct } from './types/product';
 import type { VinoshipperCustomer, VinoshipperCustomerListItem } from './types/customer';
+import type { VinoshipperGetRegisteredWebhook } from './types/webhook';
 
 const BASE_URLS = {
   production: 'https://vinoshipper.com',
@@ -125,6 +126,8 @@ const createVinoshipperClient = ({
     request,
 
     getProfile: () => request<VinoshipperProfile>('/api/v3/p/profile'),
+
+    getWebhooks: () => request<VinoshipperGetRegisteredWebhook[]>('/api/v3/p/profile/webhooks'),
 
     /**
      * `orderNumber` is our `Order.compliancePartnerOrderId`. Returns null when VS

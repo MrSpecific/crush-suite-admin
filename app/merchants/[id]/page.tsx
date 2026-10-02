@@ -27,6 +27,11 @@ import {
   BillingHealthCard,
   subscriptionStatusColor,
 } from '@/app/merchants/[id]/BillingHealthCard';
+import {
+  getVinoshipperMerchantOverview,
+  isOrderWebhook,
+  type VinoshipperMerchantOverview,
+} from '@/lib/vinoshipper';
 
 const productsTake = 10;
 const ordersTake = 20;
@@ -191,7 +196,16 @@ export default async function Page(
     orders: monthlyBillingOrders,
   });
 
-  const billingFacts = await loadBillingFacts(data);
+  const isVinoshipper = compliancePartner === 'VINOSHIPPER';
+  const [billingFacts, vinoshipperOverview, linkedProductCount] = await Promise.all([
+    loadBillingFacts(data),
+    isVinoshipper ? getVinoshipperMerchantOverview(data) : null,
+    isVinoshipper
+      ? prisma.product.count({
+          where: { merchantId, compliancePartnerProductId: { not: null } },
+        })
+      : 0,
+  ]);
   const billingDiagnosis = diagnoseBilling(billingFacts);
   const shopifyBillingLookup: ShopifyBillingLookup = {
     subscriptions: billingFacts.active,
@@ -340,6 +354,15 @@ export default async function Page(
       />
 
       <ShopifyBillingCard lookup={shopifyBillingLookup} />
+
+      {vinoshipperOverview && (
+        <VinoshipperAccountCard
+          overview={vinoshipperOverview}
+          compliancePartnerId={compliancePartnerId}
+          publicKey={data.compliancePartnerApiPub}
+          linkedProductCount={linkedProductCount}
+        />
+      )}
 
       {isShipCompliant && <MerchantSyncJobs jobs={data.ShipCompliantSyncJob} />}
 
@@ -604,6 +627,150 @@ const ShopifyBillingCard = ({ lookup }: { lookup: ShopifyBillingLookup }) => {
         ))
       ) : (
         <Text color="gray" size="2">{error || 'No active app subscription found.'}</Text>
+      )}
+    </Card>
+  );
+};
+
+const VinoshipperAccountCard = ({
+  overview,
+  compliancePartnerId,
+  publicKey,
+  linkedProductCount,
+}: {
+  overview: VinoshipperMerchantOverview;
+  compliancePartnerId: string | null;
+  publicKey: string | null;
+  linkedProductCount: number;
+}) => {
+  const { profile, webhooks, productFeed } = overview;
+  const producer = profile.data;
+  const orderWebhooks = webhooks.data?.filter(isOrderWebhook) ?? [];
+  const products = productFeed.data?.products ?? [];
+  const states = productFeed.data?.states ?? [];
+  const idMismatch = producer && compliancePartnerId && String(producer.id) !== compliancePartnerId;
+  const yesNo = (value: boolean) => (
+    <Badge color={value ? 'green' : 'gray'} variant="soft">
+      {value ? 'Yes' : 'No'}
+    </Badge>
+  );
+  const failed = (error?: string) => (
+    <Text color="red" size="2">
+      {error}
+    </Text>
+  );
+
+  return (
+    <Card my="4" style={{ borderTop: '3px solid #7A1F3D' }}>
+      <Flex justify="between" align="center" gap="3" mb="3">
+        <Flex align="center" gap="2">
+          <Heading size="4" style={{ color: '#7A1F3D' }}>
+            Vinoshipper
+          </Heading>
+          <Text size="2" color="gray">
+            Account
+          </Text>
+        </Flex>
+        {producer ? (
+          <Badge style={{ backgroundColor: '#f6e7ec', color: '#7A1F3D' }} variant="soft">
+            Connected
+          </Badge>
+        ) : (
+          <Badge color="red" variant="soft">
+            Unavailable
+          </Badge>
+        )}
+      </Flex>
+
+      {overview.error ? (
+        <Text color="gray" size="2">
+          {overview.error}
+        </Text>
+      ) : (
+        <QuickDataList
+          data={[
+            producer
+              ? {
+                  label: 'Producer',
+                  value: producer.name,
+                  linkTo: producer.website ? String(producer.website) : undefined,
+                  target: '_blank',
+                  bold: true,
+                }
+              : { label: 'Profile', children: failed(profile.error) },
+            {
+              label: 'Producer ID',
+              children: producer ? (
+                <Flex direction="column">
+                  <Text>{producer.id}</Text>
+                  {idMismatch && (
+                    <Text color="red" size="1">
+                      Doesn&apos;t match the stored Compliance Partner ID ({compliancePartnerId})
+                    </Text>
+                  )}
+                </Flex>
+              ) : undefined,
+            },
+            { label: 'Public Key', value: publicKey, clipboard: true, as: 'code' },
+            {
+              label: 'Order Webhook',
+              tooltip: 'Vinoshipper notifies us of shipments and cancellations through this.',
+              children: webhooks.data ? (
+                <Flex direction="column" gap="1">
+                  <Box>
+                    <Badge color={orderWebhooks.length ? 'green' : 'red'} variant="soft">
+                      {orderWebhooks.length ? 'Registered' : 'Missing'}
+                    </Badge>
+                  </Box>
+                  {webhooks.data.map((webhook) => (
+                    <Text key={webhook.id} size="1" color="gray">
+                      {webhook.subject}: {webhook.url}
+                    </Text>
+                  ))}
+                </Flex>
+              ) : (
+                failed(webhooks.error)
+              ),
+            },
+            producer ? { label: 'Allows Pickup', children: yesNo(producer.allowsPickup) } : undefined,
+            producer
+              ? { label: 'Allows Local Delivery', children: yesNo(producer.allowsLocalDelivery) }
+              : undefined,
+            {
+              label: 'Minimum Order Qty',
+              value: producer ? String(producer.minimumOrderQuantity) : undefined,
+            },
+            {
+              label: 'Shipping Classes',
+              children: producer?.enabledShippingClasses?.length ? (
+                <Flex gap="1" wrap="wrap">
+                  {producer.enabledShippingClasses.map((shippingClass) => (
+                    <Badge key={shippingClass.shippingClassCode} color="gray" variant="soft">
+                      {shippingClass.shippingClassName}
+                    </Badge>
+                  ))}
+                </Flex>
+              ) : undefined,
+            },
+            {
+              label: 'Products',
+              children: productFeed.data ? (
+                <Text>
+                  {products.length} in Vinoshipper ({products.filter((p) => p.alcohol).length}{' '}
+                  alcohol, {products.filter((p) => p.inventory <= 0).length} sold out) ·{' '}
+                  {linkedProductCount} linked in Crush Suite
+                </Text>
+              ) : (
+                failed(productFeed.error)
+              ),
+            },
+            {
+              label: 'Ships To',
+              value: productFeed.data ? `${states.length} states` : undefined,
+              tooltip: states.map((state) => state.abbr).join(', ') || undefined,
+            },
+          ].filter(Boolean) as DataListItem[]}
+        />
       )}
     </Card>
   );
