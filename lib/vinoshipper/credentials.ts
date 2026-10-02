@@ -23,8 +23,15 @@ export const decryptVinoshipperSecret = (
   const ciphertext = data.subarray(16);
   const { key, iv } = evpBytesToKey(Buffer.from(passphrase, 'utf8'), salt);
 
-  const decipher = createDecipheriv('aes-256-cbc', key, iv);
-  return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString('utf8');
+  try {
+    const decipher = createDecipheriv('aes-256-cbc', key, iv);
+    return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString('utf8');
+  } catch {
+    // A padding failure ("bad decrypt") almost always means the wrong passphrase.
+    throw new Error(
+      "VINOSHIPPER_ENCRYPTION_KEY doesn't match the key this secret was encrypted with. It must equal the main app's VINOSHIPPER_ENCRYPTION_KEY for this environment"
+    );
+  }
 };
 
 const evpBytesToKey = (password: Buffer, salt: Buffer, keyLength = 32, ivLength = 16) => {
