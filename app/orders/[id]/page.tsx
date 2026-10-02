@@ -180,62 +180,60 @@ export default async function Page(props: { params: Promise<{ id: string }> }) {
       )}
 
       <Grid gap="4" columns={{ initial: '1', md: '2' }}>
-        <Card>
-          <Heading size="3" mb="3">
-            Order Details
-          </Heading>
-          <QuickDataList
-            data={[
-              { label: 'ID', value: id },
-              { label: 'Platform Order Name', value: data.platformOrderName },
-              { label: 'Compliance Partner', value: compliancePartner },
-              {
-                label: 'Compliance Partner Order ID',
-                value: data.compliancePartnerOrderId,
-                clipboard: true,
-              },
-              { label: 'Platform Order ID', value: data.platformOrderId, clipboard: true },
-              { label: 'Platform', value: data.platform },
-              { label: 'Created With', value: data.createdWith },
-              {
-                label: 'Status',
-                children: (
-                  <Badge color={statusMeta?.color} variant="soft">
-                    {statusMeta?.label || data.status}
-                  </Badge>
-                ),
-              },
-              {
-                label: 'Transaction',
-                value:
-                  data.transactionMonth && data.transactionYear
-                    ? `${data.transactionMonth}/${data.transactionYear}`
-                    : undefined,
-              },
-              {
-                label: 'Pickup Order',
-                children: (
-                  <Badge color={data.isPickup ? 'amber' : 'gray'} variant="soft">
-                    {data.isPickup ? 'Yes' : 'No'}
-                  </Badge>
-                ),
-              },
-              { label: 'UPS Pickup ID', value: data.upsPickupId, clipboard: true },
-              {
-                label: 'Last Compliance Poll',
-                value: data.compliancePartnerLastPolledAt
-                  ? dateTimeFormatter(data.compliancePartnerLastPolledAt)
-                  : undefined,
-              },
-              { label: 'Created At', value: dateTimeFormatter(data.createdAt) },
-              { label: 'Updated At', value: dateTimeFormatter(data.updatedAt) },
-              { label: 'Update Count', value: String(data.updatedCount) },
-            ]}
-          />
-        </Card>
-
         <Flex direction="column" gap="4">
-          <ShopifyOrderCard shop={data.merchant?.shop} lookup={shopifyOrderLookup} />
+          <Card>
+            <Heading size="3" mb="3">
+              Order Details
+            </Heading>
+            <QuickDataList
+              data={[
+                { label: 'ID', value: id },
+                { label: 'Platform Order Name', value: data.platformOrderName },
+                { label: 'Compliance Partner', value: compliancePartner },
+                {
+                  label: 'Compliance Partner Order ID',
+                  value: data.compliancePartnerOrderId,
+                  clipboard: true,
+                },
+                { label: 'Platform Order ID', value: data.platformOrderId, clipboard: true },
+                { label: 'Platform', value: data.platform },
+                { label: 'Created With', value: data.createdWith },
+                {
+                  label: 'Status',
+                  children: (
+                    <Badge color={statusMeta?.color} variant="soft">
+                      {statusMeta?.label || data.status}
+                    </Badge>
+                  ),
+                },
+                {
+                  label: 'Transaction',
+                  value:
+                    data.transactionMonth && data.transactionYear
+                      ? `${data.transactionMonth}/${data.transactionYear}`
+                      : undefined,
+                },
+                {
+                  label: 'Pickup Order',
+                  children: (
+                    <Badge color={data.isPickup ? 'amber' : 'gray'} variant="soft">
+                      {data.isPickup ? 'Yes' : 'No'}
+                    </Badge>
+                  ),
+                },
+                { label: 'UPS Pickup ID', value: data.upsPickupId, clipboard: true },
+                {
+                  label: 'Last Compliance Poll',
+                  value: data.compliancePartnerLastPolledAt
+                    ? dateTimeFormatter(data.compliancePartnerLastPolledAt)
+                    : undefined,
+                },
+                { label: 'Created At', value: dateTimeFormatter(data.createdAt) },
+                { label: 'Updated At', value: dateTimeFormatter(data.updatedAt) },
+                { label: 'Update Count', value: String(data.updatedCount) },
+              ]}
+            />
+          </Card>
 
           <Card>
             <Heading size="3" mb="3">
@@ -256,6 +254,10 @@ export default async function Page(props: { params: Promise<{ id: string }> }) {
               ]}
             />
           </Card>
+        </Flex>
+
+        <Flex direction="column" gap="4">
+          <ShopifyOrderCard shop={data.merchant?.shop} lookup={shopifyOrderLookup} />
 
           <Card>
             <Heading size="3" mb="3">
