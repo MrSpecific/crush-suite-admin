@@ -114,4 +114,5 @@ const sum = (values: (number | null | undefined)[] = []) =>
 const liability = (value?: number | null) =>
   typeof value === 'number' && Number.isFinite(value) ? round(-value) : null;
 
-const round = (value: number) => Math.round(value * 100) / 100;
+// `|| 0` turns -0 (a flipped zero charge) into 0 so it doesn't print as "-$0.00".
+const round = (value: number) => Math.round(value * 100) / 100 || 0;

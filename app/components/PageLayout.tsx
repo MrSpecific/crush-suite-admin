@@ -18,7 +18,7 @@ export const PageLayout = ({
       <Section>
         <Container>
           <Flex justify="between" gap="2">
-            <Box mb="6">
+            <Box mb="4">
               <Heading as="h1">{heading}</Heading>
               {subheading && (
                 <Text size="3" color="tomato" mt="-9" mb="4">

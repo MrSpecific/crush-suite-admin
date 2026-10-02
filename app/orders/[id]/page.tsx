@@ -1,5 +1,16 @@
 import { prisma } from '@/lib/prisma';
-import { Box, Card, Code, Grid, Heading, Text, Table, Badge, Callout, Flex } from '@radix-ui/themes';
+import {
+  Box,
+  Card,
+  Code,
+  Grid,
+  Heading,
+  Text,
+  Table,
+  Badge,
+  Callout,
+  Flex,
+} from '@radix-ui/themes';
 import { ExclamationTriangleIcon } from '@radix-ui/react-icons';
 import { Link } from '@/app/components/Link';
 import { DataDialog } from '@/app/components/DataDialog';
@@ -192,6 +203,19 @@ export default async function Page(props: { params: Promise<{ id: string }> }) {
           </Box>
         </Callout.Root>
       )}
+
+      <OrderInvoice
+        items={items}
+        productsByVariantId={productsByVariantId}
+        totals={{
+          totalValue: data.totalValue,
+          totalTax: data.totalTax,
+          totalShipping: data.totalShipping,
+          totalDiscounts: data.totalDiscounts,
+          totalComplianceFees: data.totalComplianceFees,
+          shippingMethod: data.shippingMethod,
+        }}
+      />
 
       <Grid gap="4" columns={{ initial: '1', md: '2' }}>
         <Flex direction="column" gap="4">
@@ -443,19 +467,6 @@ export default async function Page(props: { params: Promise<{ id: string }> }) {
           </Table.Root>
         </Card>
       )}
-
-      <OrderInvoice
-        items={items}
-        productsByVariantId={productsByVariantId}
-        totals={{
-          totalValue: data.totalValue,
-          totalTax: data.totalTax,
-          totalShipping: data.totalShipping,
-          totalDiscounts: data.totalDiscounts,
-          totalComplianceFees: data.totalComplianceFees,
-          shippingMethod: data.shippingMethod,
-        }}
-      />
 
       {webhookLogs.length > 0 && (
         <Card my="5">
@@ -725,7 +736,11 @@ const OrderInvoice = ({
             .filter((row) => !row.hide)
             .map((row, index) => (
               <Table.Row key={row.label} align="center">
-                <Table.Cell colSpan={4} justify="end" style={index === 0 ? summaryDivider : undefined}>
+                <Table.Cell
+                  colSpan={4}
+                  justify="end"
+                  style={index === 0 ? summaryDivider : undefined}
+                >
                   <Text color="gray">{row.label}</Text>
                   {row.note && (
                     <Text size="1" color="gray">
@@ -757,8 +772,9 @@ const OrderInvoice = ({
 
       {Math.abs(difference) >= 0.01 && (
         <Text as="p" size="1" color="gray" mt="2" align="right">
-          The order total differs from the lines above by {currencyFormatterWithDecimals(difference)}.
-          Usually tips, refunds or edits made after the order was saved.
+          The order total differs from the lines above by{' '}
+          {currencyFormatterWithDecimals(difference)}. Usually tips, refunds or edits made after the
+          order was saved.
         </Text>
       )}
     </Card>
@@ -856,7 +872,8 @@ const VinoshipperOrderCard = ({ lookup }: { lookup: VinoshipperOrderLookup }) =>
                 label: 'Tax Difference',
                 value: figures.taxesAdjusted ? money(figures.taxesAdjusted) : undefined,
                 color: figures.taxesAdjusted && figures.taxesAdjusted < 0 ? 'red' : undefined,
-                tooltip: 'Tax we submitted minus what Vinoshipper calculated. Negative means we under-collected.',
+                tooltip:
+                  'Tax we submitted minus what Vinoshipper calculated. Negative means we under-collected.',
               },
               { label: 'VS Fees', value: figures.fees ? money(figures.fees) : undefined },
               {
@@ -878,7 +895,10 @@ const VinoshipperOrderCard = ({ lookup }: { lookup: VinoshipperOrderLookup }) =>
               {
                 label: 'Shipping',
                 value:
-                  [order.shipping?.rateDescription || order.shipping?.rateCode, money(figures.shipping)]
+                  [
+                    order.shipping?.rateDescription || order.shipping?.rateCode,
+                    money(figures.shipping),
+                  ]
                     .filter(Boolean)
                     .join(' · ') || undefined,
               },
@@ -887,7 +907,11 @@ const VinoshipperOrderCard = ({ lookup }: { lookup: VinoshipperOrderLookup }) =>
                 children: figures.trackingNumbers.length ? (
                   <Flex direction="column">
                     {figures.trackingNumbers.map((trackingNumber) => (
-                      <Link key={trackingNumber} href={getUpsTrackingUrl(trackingNumber)} target="_blank">
+                      <Link
+                        key={trackingNumber}
+                        href={getUpsTrackingUrl(trackingNumber)}
+                        target="_blank"
+                      >
                         {trackingNumber}
                       </Link>
                     ))}
