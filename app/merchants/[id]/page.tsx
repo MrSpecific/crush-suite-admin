@@ -666,6 +666,7 @@ const MerchantOrders = ({
         <Heading mb="2">Recent Orders</Heading>
         {count > ordersTake && <Link href={`/merchants/${merchantId}/orders`}>View More</Link>}
       </Flex>
+      <DataFilter action={`/merchants/${merchantId}/orders`} />
       <DataTable
         headers={getOrderTableHeaders({ includeMerchant: false })}
         data={orders}

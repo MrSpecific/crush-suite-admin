@@ -31,7 +31,11 @@ export const DataFilter = ({
   const { push } = useRouter();
   const currentPathname = usePathname();
   const pathname = action ?? currentPathname;
-  const searchParams = useSearchParams();
+  const currentSearchParams = useSearchParams();
+  // When submitting to another page, don't carry over this page's params (e.g.
+  // a products search on the merchant page shouldn't prefill an orders search).
+  const searchParams =
+    pathname === currentPathname ? currentSearchParams : new URLSearchParams();
   const params = new URLSearchParams(searchParams.toString());
   const currentSearch = params.get('search') || '';
   const searchInputId = useId();
@@ -130,7 +134,7 @@ const DataSelectFilter = ({
   onChange,
 }: {
   filter: SelectDataFilter;
-  searchParams: ReturnType<typeof useSearchParams>;
+  searchParams: URLSearchParams;
   onChange: (params: URLSearchParams) => void;
 }) => {
   const filterId = useId();

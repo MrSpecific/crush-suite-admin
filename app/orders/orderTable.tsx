@@ -1,10 +1,10 @@
 import { Header } from '@/app/components/DataTable';
 import { ButtonLink } from '@/app/components/ButtonLink';
+import { Link } from '@/app/components/Link';
 import {
   currencyFormatterWithDecimals,
   dateFormatter,
   issuesFormatter,
-  merchantFormatter,
   orderStatusFormatter,
 } from '@/lib/formatters';
 import { Box, Flex, Text } from '@radix-ui/themes';
@@ -22,7 +22,7 @@ export const getOrderTableHeaders = ({
     headers.push({
       id: 'merchant',
       title: 'Merchant',
-      formatter: merchantFormatter,
+      formatter: orderMerchantFormatter,
     });
   }
 
@@ -57,8 +57,28 @@ export const OrderTableActions = ({ id }: { id: number }) => {
   );
 };
 
+// Links to the order rather than the merchant, since the row is the order.
+const orderMerchantFormatter = (value: any, row: any) => (
+  <Box>
+    <Link href={`/orders/${row.id}`}>
+      <Text as="div" weight="bold">
+        {value?.compliancePartnerAccountName}
+      </Text>
+      {value?.shop}
+    </Link>
+  </Box>
+);
+
 const orderIdsFormatter = (value: any, row: any) => (
   <Flex direction="column" gap="2">
+    {row.platformOrderName && (
+      <Box>
+        <Text as="div" size="1" color="gray">
+          Shopify Order Number:
+        </Text>
+        <Text weight="bold">{row.platformOrderName}</Text>
+      </Box>
+    )}
     <Box>
       <Text as="div" size="1" color="gray">
         Compliance Partner Order ID:

@@ -1,8 +1,10 @@
+import { DataFilter } from '@/app/components/DataFilter';
 import { DataTable } from '@/app/components/DataTable';
 import { NotFound } from '@/app/components/NotFound';
 import { PageLayout } from '@/app/components/PageLayout';
 import { Pagination } from '@/app/components/Pagination';
 import { OrderTableActions, getOrderTableHeaders } from '@/app/orders/orderTable';
+import { getOrderSearchWhere } from '@/lib/orderSearch';
 import { prisma } from '@/lib/prisma';
 import { queryPagination } from '@/lib/queryPagination';
 
@@ -15,7 +17,7 @@ export default async function Page(
   const searchParams = await props.searchParams;
   const params = await props.params;
   const merchantId = parseInt(params.id);
-  const { page } = searchParams;
+  const { page, search } = searchParams;
 
   const merchant = await prisma.merchant.findUnique({
     where: {
@@ -32,6 +34,7 @@ export default async function Page(
 
   const where = {
     merchantId,
+    ...getOrderSearchWhere(search),
   };
 
   const count = await prisma.order.count({ where });
@@ -48,6 +51,7 @@ export default async function Page(
       heading={`Orders for ${merchant.compliancePartnerAccountName ?? merchant.shop}`}
       actions={[{ label: 'Back to Merchant', href: `/merchants/${merchant.id}` }]}
     >
+      <DataFilter />
       <DataTable
         headers={getOrderTableHeaders({ includeMerchant: false })}
         data={orders}

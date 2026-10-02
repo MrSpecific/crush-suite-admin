@@ -1,32 +1,42 @@
 import { prisma } from '@/lib/prisma';
-import { Box, Badge, Card, Flex, Grid, Heading, Text } from '@radix-ui/themes';
+import { Box, Badge, Card, Flex, Grid, Heading } from '@radix-ui/themes';
 import { NotFound } from '@/app/components/NotFound';
 import { PageLayout } from '@/app/components/PageLayout';
 import { QuickDataList } from '@/app/components/QuickDataList';
 import { DataTable } from '@/app/components/DataTable';
+import { DataFilter } from '@/app/components/DataFilter';
+import { Pagination } from '@/app/components/Pagination';
+import { getOrderSearchWhere } from '@/lib/orderSearch';
+import { queryPagination } from '@/lib/queryPagination';
 import { dateFormatter, dateTimeFormatter, emailFormatter } from '@/lib/formatters';
 import { OrderTableActions, getOrderTableHeaders } from '@/app/orders/orderTable';
 
 const ordersTake = 20;
 
-export default async function Page(props: { params: Promise<{ id: string }> }) {
+export default async function Page(props: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<PageSearchParams>;
+}) {
   const params = await props.params;
   const { id } = params;
+  const { page, search } = await props.searchParams;
 
   const data = await prisma.customer.findUnique({
     where: { id: parseInt(id) },
     include: {
       merchant: true,
-      orders: {
-        orderBy: { createdAt: 'desc' },
-        take: ordersTake,
-      },
     },
   });
 
   if (!id || !data) return <NotFound message="Customer Not Found" />;
 
-  const orderCount = await prisma.order.count({ where: { customerId: parseInt(id) } });
+  const orderWhere = { customerId: data.id, ...getOrderSearchWhere(search) };
+  const orderCount = await prisma.order.count({ where: orderWhere });
+  const orders = await prisma.order.findMany({
+    ...queryPagination({ page, take: ordersTake, count: orderCount }),
+    where: orderWhere,
+    orderBy: { createdAt: 'desc' },
+  });
 
   const fullName = [data.firstName, data.lastName].filter(Boolean).join(' ') || data.email;
   const memberships = Array.isArray(data.memberships)
@@ -136,16 +146,13 @@ export default async function Page(props: { params: Promise<{ id: string }> }) {
         <Flex justify="between" align="center" gap="2" mb="2">
           <Heading size="4">Orders ({orderCount})</Heading>
         </Flex>
+        <DataFilter />
         <DataTable
           headers={getOrderTableHeaders({ includeMerchant: false })}
-          data={data.orders}
+          data={orders}
           Actions={OrderTableActions}
         />
-        {orderCount > ordersTake && (
-          <Text size="2" color="gray" mt="2" as="div">
-            Showing {ordersTake} of {orderCount} orders.
-          </Text>
-        )}
+        <Pagination take={ordersTake} count={orderCount} />
       </Box>
     </PageLayout>
   );
