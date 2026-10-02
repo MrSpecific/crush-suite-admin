@@ -583,10 +583,10 @@ const ShopifyOrderCard = ({
               label: 'Channel',
               value: order.channelInformation?.channelDefinition?.channelName,
             },
-            {
-              label: 'Subchannel',
-              value: order.channelInformation?.channelDefinition?.subChannelName,
-            },
+            // {
+            //   label: 'Subchannel',
+            //   value: order.channelInformation?.channelDefinition?.subChannelName,
+            // },
             {
               label: 'Marketplace',
               value:
