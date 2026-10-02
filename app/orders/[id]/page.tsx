@@ -292,12 +292,6 @@ export default async function Page(props: { params: Promise<{ id: string }> }) {
               ]}
             />
           </Card>
-        </Flex>
-
-        <Flex direction="column" gap="4">
-          <ShopifyOrderCard shop={data.merchant?.shop} lookup={shopifyOrderLookup} />
-
-          {vinoshipperOrderLookup && <VinoshipperOrderCard lookup={vinoshipperOrderLookup} />}
 
           <Card>
             <Heading size="3" mb="3">
@@ -334,6 +328,12 @@ export default async function Page(props: { params: Promise<{ id: string }> }) {
               ]}
             />
           </Card>
+        </Flex>
+
+        <Flex direction="column" gap="4">
+          <ShopifyOrderCard shop={data.merchant?.shop} lookup={shopifyOrderLookup} />
+
+          {vinoshipperOrderLookup && <VinoshipperOrderCard lookup={vinoshipperOrderLookup} />}
         </Flex>
       </Grid>
 
