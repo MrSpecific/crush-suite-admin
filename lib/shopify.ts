@@ -311,6 +311,110 @@ export function getShopifyAdminOrderUrl(shop: string, platformOrderId: string) {
   return `https://${normalizeShopifyShopDomain(shop)}/admin/orders/${platformOrderId}`;
 }
 
+export type ShopifySubscriptionBillingAttempt = {
+  id: string;
+  createdAt: string;
+  completedAt: string | null;
+  ready: boolean;
+  idempotencyKey: string;
+  nextActionUrl: string | null;
+  processingError: { code: string; message: string } | null;
+  order: { id: string; name: string; legacyResourceId: string } | null;
+};
+
+export type ShopifySubscriptionContract = {
+  id: string;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+  nextBillingDate: string | null;
+  lastPaymentStatus: string | null;
+  lastBillingAttemptErrorType: string | null;
+  currencyCode: string;
+  deliveryPrice: Money | null;
+  deliveryMethod: { __typename: string } | null;
+  customerPaymentMethod: { id: string; revokedAt: string | null; revokedReason: string | null } | null;
+  billingAttempts: { nodes: ShopifySubscriptionBillingAttempt[] };
+};
+
+// `billingAttempts` doesn't support `last` without `before`, so the newest are
+// fetched with `reverse` instead.
+const SHOPIFY_SUBSCRIPTION_CONTRACT_QUERY = /* GraphQL */ `
+  query CrushSuiteAdminSubscriptionContract($id: ID!) {
+    subscriptionContract(id: $id) {
+      id
+      status
+      createdAt
+      updatedAt
+      nextBillingDate
+      lastPaymentStatus
+      lastBillingAttemptErrorType
+      currencyCode
+      deliveryPrice {
+        amount
+        currencyCode
+      }
+      deliveryMethod {
+        __typename
+      }
+      customerPaymentMethod {
+        id
+        revokedAt
+        revokedReason
+      }
+      billingAttempts(first: 10, reverse: true) {
+        nodes {
+          id
+          createdAt
+          completedAt
+          ready
+          idempotencyKey
+          nextActionUrl
+          processingError {
+            code
+            message
+          }
+          order {
+            id
+            name
+            legacyResourceId
+          }
+        }
+      }
+    }
+  }
+`;
+
+export async function getShopifySubscriptionContract({
+  shop,
+  accessToken,
+  platformContractId,
+}: {
+  shop: string;
+  accessToken: string;
+  platformContractId: string;
+}) {
+  const data = await shopifyAdminGraphql<
+    { subscriptionContract: ShopifySubscriptionContract | null },
+    { id: string }
+  >({
+    shop,
+    accessToken,
+    query: SHOPIFY_SUBSCRIPTION_CONTRACT_QUERY,
+    variables: { id: toShopifySubscriptionContractGid(platformContractId) },
+  });
+
+  return data.subscriptionContract;
+}
+
+export function toShopifySubscriptionContractGid(platformContractId: string) {
+  if (platformContractId.startsWith('gid://shopify/SubscriptionContract/')) {
+    return platformContractId;
+  }
+
+  return `gid://shopify/SubscriptionContract/${platformContractId}`;
+}
+
 function normalizeShopifyShopDomain(shop: string) {
   const trimmedShop = shop
     .trim()

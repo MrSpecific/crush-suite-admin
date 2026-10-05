@@ -4,6 +4,9 @@ import { QuickDataList } from '@/app/components/QuickDataList';
 import { DataTable } from '@/app/components/DataTable';
 import { DataDialog } from '@/app/components/DataDialog';
 import { NotFound } from '@/app/components/NotFound';
+import { LoadingSkeleton } from '@/app/components/LoadingSkeleton';
+import { Suspense } from 'react';
+import { ExternalStatus } from './ExternalStatus';
 import { Badge, Box, Card, Grid, Heading, Text } from '@radix-ui/themes';
 import { dateFormatter, dateTimeFormatter } from '@/lib/formatters';
 import type { RadixColor } from '@/types/radix-ui';
@@ -373,6 +376,19 @@ export default async function Page(
           />
         </Card>
       </Grid>
+
+      <Box mb="6">
+        <Heading size="4" mb="3">Live Status</Heading>
+        <Suspense fallback={<LoadingSkeleton />}>
+          <ExternalStatus
+            shop={order.release.club.merchant.shop}
+            platformOrderId={order.platformOrderId}
+            platformContractId={order.platformContractId}
+            contractCancelledAt={order.contractCancelledAt}
+            closedOutAt={order.closedOutAt}
+          />
+        </Suspense>
+      </Box>
 
       <Grid columns={{ initial: '1', md: '2' }} gap="4" mb="6">
         <Card>
