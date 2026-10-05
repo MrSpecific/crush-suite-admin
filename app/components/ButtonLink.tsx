@@ -3,6 +3,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Button, type ButtonProps, IconButton, type IconButtonProps } from '@radix-ui/themes';
+import { ExternalLinkIcon } from '@radix-ui/react-icons';
 
 export const ButtonLink = ({
   href,
@@ -46,5 +47,21 @@ export const IconButtonLink = ({
     <IconButton {...props} asChild>
       <Link href={href}>{children}</Link>
     </IconButton>
+  );
+};
+
+// Opens another system (Shopify, Vinoshipper, the Clubs app) in a new tab
+export const ExternalButtonLink = ({
+  href,
+  children,
+  ...props
+}: { href: string; children: React.ReactNode } & ButtonProps) => {
+  return (
+    <Button {...props} asChild>
+      <a href={href} target="_blank" rel="noopener noreferrer">
+        {children}
+        <ExternalLinkIcon />
+      </a>
+    </Button>
   );
 };

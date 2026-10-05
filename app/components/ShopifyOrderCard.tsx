@@ -1,5 +1,6 @@
 import { Badge, Card, Flex, Text } from '@radix-ui/themes';
 import { QuickDataList } from '@/app/components/QuickDataList';
+import { ExternalButtonLink } from '@/app/components/ButtonLink';
 import { dateTimeFormatter } from '@/lib/formatters';
 import {
   formatMoney,
@@ -17,11 +18,16 @@ export type ShopifyOrderLookup = {
 export const ShopifyOrderCard = ({
   lookup,
   shop,
+  platformOrderId,
 }: {
   lookup: ShopifyOrderLookup;
   shop?: string | null;
+  // Fallback for the admin link when the live lookup fails (e.g. an expired token)
+  platformOrderId?: string | null;
 }) => {
   const { order, error } = lookup;
+  const adminOrderId = order?.legacyResourceId ?? platformOrderId;
+  const adminUrl = shop && adminOrderId ? getShopifyAdminOrderUrl(shop, adminOrderId) : undefined;
   const sourceLabel = getShopifyOrderSourceLabel(order);
   const currentTotal = order?.currentTotalPriceSet?.shopMoney || order?.totalPriceSet?.shopMoney;
 
@@ -33,15 +39,22 @@ export const ShopifyOrderCard = ({
           alt="Shopify"
           style={{ height: '26px', display: 'block' }}
         />
-        {order ? (
-          <Badge style={{ backgroundColor: '#e8f5d9', color: '#3d6b17' }} variant="soft">
-            Live
-          </Badge>
-        ) : (
-          <Badge color="gray" variant="soft">
-            Unavailable
-          </Badge>
-        )}
+        <Flex align="center" gap="2">
+          {order ? (
+            <Badge style={{ backgroundColor: '#e8f5d9', color: '#3d6b17' }} variant="soft">
+              Live
+            </Badge>
+          ) : (
+            <Badge color="gray" variant="soft">
+              Unavailable
+            </Badge>
+          )}
+          {adminUrl && (
+            <ExternalButtonLink href={adminUrl} size="1" variant="soft" color="gray">
+              Open in Shopify
+            </ExternalButtonLink>
+          )}
+        </Flex>
       </Flex>
 
       {order ? (
@@ -50,10 +63,7 @@ export const ShopifyOrderCard = ({
             {
               label: 'Admin',
               value: order.name,
-              linkTo:
-                shop && order.legacyResourceId
-                  ? getShopifyAdminOrderUrl(shop, order.legacyResourceId)
-                  : undefined,
+              linkTo: adminUrl,
               target: '_blank',
             },
             { label: 'Source', value: sourceLabel, bold: true },

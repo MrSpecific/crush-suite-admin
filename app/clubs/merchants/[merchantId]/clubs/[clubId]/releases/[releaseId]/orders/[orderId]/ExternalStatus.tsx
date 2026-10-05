@@ -1,10 +1,11 @@
 import { prisma } from '@/lib/prisma';
-import { getClubsShopAccessToken } from '@/lib/clubs-shopify';
+import { getClubsAppOrderUrl, getClubsShopAccessToken } from '@/lib/clubs-shopify';
 import { getVinoshipperOrderLookup } from '@/lib/vinoshipper';
 import { orderStatusMetaData } from '@/lib/metaData';
 import { dateTimeFormatter } from '@/lib/formatters';
 import { Badge, Card, Flex, Grid, Heading, Text } from '@radix-ui/themes';
 import { QuickDataList } from '@/app/components/QuickDataList';
+import { ButtonLink } from '@/app/components/ButtonLink';
 import { ShopifyOrderCard, getShopifyOrderLookup } from '@/app/components/ShopifyOrderCard';
 import { VinoshipperOrderCard } from '@/app/components/VinoshipperOrderCard';
 import {
@@ -16,12 +17,16 @@ import {
 // Suspense boundary and the rest of the order page doesn't wait on them.
 export async function ExternalStatus({
   shop,
+  releaseId,
+  releaseOrderId,
   platformOrderId,
   platformContractId,
   contractCancelledAt,
   closedOutAt,
 }: {
   shop: string;
+  releaseId: string;
+  releaseOrderId: string;
   platformOrderId: string | null;
   platformContractId: string | null;
   contractCancelledAt: Date | null;
@@ -47,7 +52,7 @@ export async function ExternalStatus({
   return (
     <>
       <Grid columns={{ initial: '1', md: '2', lg: '3' }} gap="4" mb="4" align="start">
-        <ShopifyOrderCard shop={shop} lookup={shopifyOrderLookup} />
+        <ShopifyOrderCard shop={shop} lookup={shopifyOrderLookup} platformOrderId={platformOrderId} />
         <ComplianceOrderCard order={complianceOrder} platformOrderId={platformOrderId} />
         {vinoshipperOrderLookup && <VinoshipperOrderCard lookup={vinoshipperOrderLookup} />}
       </Grid>
@@ -56,6 +61,7 @@ export async function ExternalStatus({
         shop={shop}
         lookup={contractLookup}
         stored={{ platformOrderId, contractCancelledAt, closedOutAt }}
+        clubsAppUrl={getClubsAppOrderUrl(shop, releaseId, releaseOrderId)}
       />
     </>
   );
@@ -104,15 +110,22 @@ const ComplianceOrderCard = ({
     <Card>
       <Flex justify="between" align="center" gap="3" mb="3">
         <Heading size="4">Compliance</Heading>
-        {order ? (
-          <Badge color={statusMeta?.color ?? 'gray'} variant="soft">
-            {statusMeta?.label ?? order.status}
-          </Badge>
-        ) : (
-          <Badge color="gray" variant="soft">
-            Not found
-          </Badge>
-        )}
+        <Flex align="center" gap="2">
+          {order ? (
+            <Badge color={statusMeta?.color ?? 'gray'} variant="soft">
+              {statusMeta?.label ?? order.status}
+            </Badge>
+          ) : (
+            <Badge color="gray" variant="soft">
+              Not found
+            </Badge>
+          )}
+          {order && (
+            <ButtonLink href={`/orders/${order.id}`} size="1" variant="soft" color="gray">
+              Open in Compliance
+            </ButtonLink>
+          )}
+        </Flex>
       </Flex>
 
       {order ? (

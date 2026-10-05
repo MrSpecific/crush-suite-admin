@@ -382,6 +382,8 @@ export default async function Page(
         <Suspense fallback={<LoadingSkeleton />}>
           <ExternalStatus
             shop={order.release.club.merchant.shop}
+            releaseId={order.releaseId}
+            releaseOrderId={order.id}
             platformOrderId={order.platformOrderId}
             platformContractId={order.platformContractId}
             contractCancelledAt={order.contractCancelledAt}

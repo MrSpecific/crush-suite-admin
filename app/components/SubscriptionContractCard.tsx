@@ -1,6 +1,7 @@
 import { Badge, Box, Callout, Card, Flex, Grid, Heading, Text } from '@radix-ui/themes';
 import { ExclamationTriangleIcon } from '@radix-ui/react-icons';
 import { DataDialog } from '@/app/components/DataDialog';
+import { ExternalButtonLink } from '@/app/components/ButtonLink';
 import { DataTable } from '@/app/components/DataTable';
 import { Link } from '@/app/components/Link';
 import { QuickDataList } from '@/app/components/QuickDataList';
@@ -118,9 +119,12 @@ export const SubscriptionContractCard = ({
   lookup,
   shop,
   stored,
+  clubsAppUrl,
 }: {
   lookup: SubscriptionContractLookup;
   shop: string;
+  // Shopify admin has no page for a contract; the Clubs app's order page is where it's managed
+  clubsAppUrl?: string | null;
   stored: { platformOrderId: string | null; contractCancelledAt: Date | null; closedOutAt: Date | null };
 }) => {
   const { contract, error } = lookup;
@@ -182,6 +186,11 @@ export const SubscriptionContractCard = ({
             </Badge>
           )}
           {contract && <DataDialog title="Subscription Contract" data={contract} />}
+          {clubsAppUrl && (
+            <ExternalButtonLink href={clubsAppUrl} size="1" variant="soft" color="gray">
+              Open in Clubs
+            </ExternalButtonLink>
+          )}
         </Flex>
       </Flex>
 
