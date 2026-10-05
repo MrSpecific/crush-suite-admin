@@ -231,6 +231,9 @@ const ClubsNav = ({ color }: { color: RadixColor }) => (
     <NavItem href="/clubs/members" color={color}>
       Members
     </NavItem>
+    <NavItem href="/clubs/orders" color={color}>
+      Orders
+    </NavItem>
     <Separator size="4" />
     <NavItem href="/clubs/billing-plans" color={color}>
       Billing Plans

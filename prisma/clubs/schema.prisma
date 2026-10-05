@@ -274,13 +274,18 @@ model Release {
   inventoryAllocationDate           DateTime // when inventory should be allocated for this release
   shippingHoldDate                  DateTime? // when shipping should be held until - only relevant for CrushSuite compliance integration. we can decorate all contract orders with this data
   inventoryReserved                 Boolean                       @default(false)
-  inventoryReservedAt               DateTime? // when the CRON default reserve first completed (paired with inventoryReserved)
-  inventoryReservedForMemberCount   Int                           @default(0) // member count used for the last default inventory reserve — used to compute deltas
+  inventoryReservedAt               DateTime? // when the allocation-date term was first applied (paired with inventoryReserved)
   inventoryUnreserved               Boolean                       @default(false) // tracks pre-billing unreserve completion
   inventoryUnreservedAt             DateTime? // when the pre-billing/archival unreserve completed (paired with inventoryUnreserved)
   inventoryError                    String? // surfaced to merchant when unreserve fails and billing proceeds with ALLOW_OVERSELLING
   releaseOrdersProcessLockId        String? // to prevent concurrent processing of release orders
   billingAttemptsProcessLockId      String? // to prevent concurrent processing of billing attempts
+  /**
+   * Held while `reconcileReleaseInventory` runs. Two customisations landing together must not
+   * both compute the same shortfall and both move it. Same `{uuid}::{timestamp}` shape as the
+   * other two, so it ages out on its own — see `~/util/processLock`.
+   */
+  inventoryReconcileLockId          String?
   allReleaseOrdersCreated           Boolean                       @default(false) // set to true when all release orders have been created for this release
   allReleaseOrdersCreatedAt         DateTime? // when the release orders were created
   // Failure history for bulk release order creation. The CRON re-selects any release with
@@ -335,6 +340,7 @@ model Release {
   ReleaseProduct                    ReleaseProduct[]
   ReleaseOrder                      ReleaseOrder[]
   ReleaseInventoryReservation       ReleaseInventoryReservation[]
+  ReleaseInventoryAdjustment        ReleaseInventoryAdjustment[]
   releaseDiscounts                  ReleaseDiscount[]
   ReleaseReprocessLog               ReleaseReprocessLog[]
 
@@ -367,8 +373,9 @@ model ReleaseProduct {
   orderPriority               Int                           @default(0) // lower numbers appear first
   ReleaseOrderProduct         ReleaseOrderProduct[]
   ReleaseInventoryReservation ReleaseInventoryReservation[]
-  releaseProductBundle        ReleaseProductBundle?         @relation(fields: [releaseProductBundleId], references: [id])
-  releaseProductBundleId      String?
+
+  releaseProductBundle   ReleaseProductBundle? @relation(fields: [releaseProductBundleId], references: [id])
+  releaseProductBundleId String?
 
   @@index([releaseId])
 }
@@ -443,7 +450,20 @@ model ReleaseInventoryReservation {
 
   quantityReserved   Int @default(0) // total units in "reserved" state
   quantityUnreserved Int @default(0) // units moved back to "available" pre-billing
-  deficit            Int @default(0) // shortfall if available < requested
+  /**
+   * What the rule said we should hold, last time the reconcile ran: every member's chosen
+   * quantity, plus a default box for each untouched member once the allocation date has
+   * passed. `quantityReserved` is what we actually hold; the gap between them is `deficit`.
+   * 0 on a row the reconcile has never visited — the dashboard reads that as "not yet
+   * reconciled", not "nothing required".
+   */
+  requiredQuantity   Int @default(0)
+  /**
+   * Current shortfall — `requiredQuantity − quantityReserved`, floored at 0 — **set** on every
+   * reconcile, not accumulated. It used to increment per reserve attempt, which turned a wine
+   * that was short once into one that looked shorter every time anyone customised it.
+   */
+  deficit            Int @default(0)
 
   reservedAt   DateTime? // when reserve completed
   unreservedAt DateTime? // when unreserve completed
@@ -452,6 +472,45 @@ model ReleaseInventoryReservation {
   unreserveReferenceUri String? // referenceDocumentUri for the unreserve
 
   @@unique([releaseId, releaseProductId]) // one record per product per release
+  @@index([releaseId])
+}
+
+enum InventoryAdjustmentDirection {
+  reserve
+  unreserve
+}
+
+/**
+ * One row per inventory move we make in Shopify for a release — append-only.
+ * `ReleaseInventoryReservation` is the ledger: one number per wine, what we hold now. This is
+ * the audit behind it. Every `inventoryMoveQuantities` returns an `InventoryAdjustmentGroup`,
+ * and that object implements `Node`, so any move can be read back from Shopify by its id —
+ * state, signed delta, and our ledger URI. Summing the reserved deltas across a release's
+ * rows is what we hold, by Shopify's own record, independent of our database.
+ * That is what makes a lost write recoverable. We cannot ask Shopify what is reserved under our
+ * ledger URI (no query filters by it), so without these ids a hold whose ledger write failed
+ * would sit in `reserved` with nothing to return it. With them, deallocation can compare the
+ * ledger to Shopify's own account of our moves and return the larger.
+ * `releaseProductId` is a plain column, deliberately not a relation: a merchant editing the
+ * release's products cascade-deletes `ReleaseProduct`, and the audit has to outlive that. Rows
+ * are removed only when the release itself is.
+ */
+model ReleaseInventoryAdjustment {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  releaseId String
+  release   Release @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+
+  releaseProductId String
+
+  platformInventoryItemId   String // degidified Shopify InventoryItem ID
+  platformLocationId        String // degidified Shopify Location ID
+  platformAdjustmentGroupId String? // degidified Shopify InventoryAdjustmentGroup ID; null = the move was inferred from stock figures after a lost response, never confirmed by Shopify
+
+  direction InventoryAdjustmentDirection
+  quantity  Int // always positive; `direction` carries the sign
+
   @@index([releaseId])
 }
 
@@ -468,6 +527,22 @@ model ReleaseOrder {
   platformContractId                String? // eg the subscription contract ID in Shopify
   contractGeneratedAt               DateTime?
   contractCreateAttemptedAt         DateTime? // set before create so recovery search only runs on retries
+  /// Shopify confirmed the contract in `platformContractId` is CANCELLED, and
+  /// this is when. Written only on close-out, which **keeps** the reference.
+  ///
+  /// A recorded fact rather than an inference. The skip and rebuild paths null
+  /// the reference instead, and for them that is right — both expect the order
+  /// to be contracted again, so "no reference" means "contract me". Close-out
+  /// expects nothing further, so nulling bought an invariant and cost the only
+  /// handle we hold on the contract: a 3DS charge completed weeks after the
+  /// write-off arrives as a `subscription_billing_attempts/success` webhook
+  /// keyed on the contract id, and with the column nulled nothing could match
+  /// it to an order. A member was charged and no row anywhere said so.
+  ///
+  /// So a live contract is `platformContractId` set **and this null** — not
+  /// `platformContractId` set. Both CRON selectors gate on `closedOutAt: null`
+  /// rather than on the reference, so keeping it bills nothing.
+  contractCancelledAt               DateTime?
   attemptedFirstBillingAt           DateTime? // we only auto bill once per release order, so record when we first attempted to bill
   orderCreatedAt                    DateTime? // when the order was created in the platform
   platformOrderId                   String? // if the order has been created in Shopify
@@ -525,7 +600,6 @@ model ReleaseOrder {
   customerNotes                     String?
   total                             Float                          @default(0)
   currencyCode                      String                         @default("USD")
-  notes                             String[]                       @default([]) // flexibly store notes about creation
   preProcessingError                Boolean                        @default(false) // if there is likely to be a processing error due to data issues
   giftNote                          String? // this gets copied from the release at creation time but can be edited here as it is per-order, so can tailor to the customer
   clubCustomerId                    String
@@ -536,14 +610,9 @@ model ReleaseOrder {
    * records *that* it is blocked; these record *why*. See ReleaseOrderIssue.
    */
   issues                            ReleaseOrderIssue[]
-  /**
-   * Timestamp of when the order was first surfaced in Highlighted Issues.
-   */
-  highlightedIssuesListedAt         DateTime?
-  /**
-   * Merchant-controlled triage in Highlighted Issues (defaults OPEN).
-   */
-  highlightedIssueMerchantState     HighlightedIssueMerchantState  @default(OPEN)
+  events                            ReleaseOrderEvent[]
+  /// What the shop wrote about this order themselves — see `ReleaseOrderNote`.
+  merchantNotes                     ReleaseOrderNote[]
   refunds                           ReleaseOrderRefund[]
   refundedAmount                    Float                          @default(0)
   refundedQuantity                  Int                            @default(0)
@@ -585,31 +654,382 @@ model ReleaseOrderRefundLine {
   @@index([refundId])
 }
 
-enum HighlightedIssueMerchantState {
-  OPEN
-  RESOLVED
-}
-
 enum DeliveryMethod {
   SHIPPING
   PICKUP
   LOCAL_DELIVERY
 }
 
+/// What happened to a release order, and who did it.
+///
+/// The three tables that record trouble on an order answer different questions,
+/// and keeping them apart is what makes each one trustworthy:
+///
+///  - `ReleaseOrderIssue` — what is wrong **now**, and why. Current state.
+///  - `ReleaseOrderProcessingRecord` — what Shopify said when we asked it to
+///    create a contract or take a charge. One row per attempt.
+///  - this — what **happened**, and **who** did it. History, and nothing else.
+///
+/// **Nothing may read these rows to decide anything.** That rule is the whole
+/// design, not a guideline: `ReleaseOrderProcessingRecord` was also "just a
+/// log" until readers came to depend on row existence — and row *absence* — as
+/// state, until `orderProcessingRecords: { none: {} }` became the literal
+/// definition of "billing went quiet". Once absence means something, every new
+/// writer is a potential behaviour change.
+///
+/// So there is deliberately **no column a decision could key on**: no status,
+/// no `success`, no `resolvedAt`, no counters, nothing countable. Anything a
+/// surface actually reads stays a column elsewhere — `skippedAt`,
+/// `contractGeneratedAt`, `preProcessingError`. These rows are only ever the
+/// story of how those came to be. The day someone wants a badge driven by
+/// events they have to add a counting helper, which is a visible diff in review
+/// rather than a condition creeping quietly into a predicate.
+///
+/// Written fire-and-forget, outside the transaction that made the change. These
+/// writes are unlikely to fail and adding one to every bulk path would mean
+/// touching far more code than the guarantee is worth.
+///
+/// **There is deliberately no event for a charge succeeding, failing or being
+/// retried.** `ReleaseOrderProcessingRecord` already holds every billing
+/// attempt and its outcome, and a second copy here would be two records of one
+/// fact — the dual-write this split exists to avoid. One timeline on screen,
+/// three tables underneath: the merchant-facing timeline reads all three and
+/// interleaves them by time, which is a display concern, not a reason to
+/// duplicate rows. The one thing genuinely absent is *who* pressed "Retry
+/// billing"; the record carries the attempt but no actor.
+model ReleaseOrderEvent {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  releaseOrderId String
+  releaseOrder   ReleaseOrder @relation(fields: [releaseOrderId], references: [id], onDelete: Cascade)
+
+  type       ReleaseOrderEventType
+  /// Who performed this write — never who asked for it.
+  ///
+  /// A merchant clicking a button that queues a job produces two rows: MERCHANT
+  /// dispatched it, SYSTEM did it, joined by `jobId`. That keeps `actor`
+  /// meaning one thing at every row, and makes the failure we actually hit
+  /// legible — a dispatch that never reached the worker leaves a merchant
+  /// action with no system event following it.
+  actor      ReleaseOrderEventActor
+  /// Reserved, and null on every row.
+  ///
+  /// The app does not enable online tokens, so `associated_user` is always
+  /// undefined and every per-user lookup falls back to the shop domain.
+  /// MERCHANT therefore means "someone with dashboard access at this shop", not
+  /// a named person, and the merchant-facing copy must not imply otherwise.
+  /// This is the seam if online tokens are ever enabled; filling it now would
+  /// be inventing data. Same limitation as `ReleaseReprocessLog.triggeredBy`.
+  actorLabel String?
+
+  /// The values the merchant-facing sentence is built from — a rate name, the
+  /// fields that changed, an amount, which of the six ways an order was made.
+  ///
+  /// Never a finished sentence. Prose cannot be translated, and the last thing
+  /// this codebase stored as prose (`ReleaseOrder.notes`) ended up being
+  /// substring-matched by three separate readers.
+  data   Json?
+  /// Internal only. Raw upstream errors, payload fragments. Never rendered on
+  /// the timeline itself.
+  detail Json?
+
+  /// The BullMQ job this came from, so a merchant action and the background
+  /// work it triggered can be joined.
+  jobId String?
+
+  /// The Shopify receipt this event is *about*, where one exists. The event
+  /// never restates the record's outcome — the timeline renders the record.
+  processingRecordId String?
+  processingRecord   ReleaseOrderProcessingRecord? @relation(fields: [processingRecordId], references: [id], onDelete: SetNull)
+
+  @@index([releaseOrderId, createdAt])
+}
+
+enum ReleaseOrderEventActor {
+  /// The member — Customer Accounts, or the storefront.
+  CUSTOMER
+  /// A dashboard action on an authenticated admin session. Shop-level, not a
+  /// named person — see `actorLabel`.
+  MERCHANT
+  /// Our own automation: CRONs, worker jobs, bulk batches, migration.
+  SYSTEM
+  /// An inbound webhook. Shopify telling us something happened.
+  ///
+  /// Split from SYSTEM deliberately: "did we do this, or did Shopify tell us it
+  /// happened?" is the question that made several traces ambiguous. A contract
+  /// creation is ours; a billing failure is Shopify's statement about a charge.
+  SHOPIFY
+}
+
+/// What happened. The merchant-facing wording lives in `en.json`, keyed by
+/// these — the names here are internal and say "contract" and "release order"
+/// freely; the copy never does.
+enum ReleaseOrderEventType {
+  // --- how the order came to exist -----------------------------------------
+  /// `data.source` says which of the six ways: the default-box batch, the
+  /// member customizing, the member saving fields, the shop adding them, late
+  /// signup processing, or the placeholder written for a paused member.
+  ///
+  /// A qualifier rather than six types: it is one thing that happened, and a
+  /// seventh way to create an order should not need a migration.
+  ORDER_CREATED
+  CUSTOMIZED
+
+  // --- why it is not shipping ----------------------------------------------
+  // Seven distinct events, because `skippedAt` carrying all of them is exactly
+  // what tells a member who *left the club* that they "skipped a release".
+  // "Skip" appears only where the member actually chose to skip. A pause or a
+  // migration is a hold — the order comes back. Leaving is a cancellation — it
+  // does not. See #1025 for the column half of this.
+  MEMBER_SKIPPED
+  MEMBER_UNSKIPPED
+  HELD_MEMBERSHIP_PAUSED
+  RESUMED_MEMBERSHIP_REACTIVATED
+  HELD_MEMBERSHIP_MIGRATING
+  CANCELLED_MEMBER_LEFT
+  CLOSED_OUT
+
+  // --- what the member changed ---------------------------------------------
+  ADDRESS_CHANGED
+  PHONE_CHANGED
+  PAYMENT_METHOD_CHANGED
+
+  // --- what the shop changed -----------------------------------------------
+  DELIVERY_EDITED
+  LINE_ITEMS_EDITED
+  PAYMENT_METHOD_EDITED
+  GIFT_NOTE_EDITED
+  CUSTOMER_NOTES_EDITED
+  SHIPPING_HOLD_EDITED
+  ISSUE_DISMISSED
+
+  // --- what is wrong, and when it stopped being wrong ----------------------
+  // The append-only half of `ReleaseOrderIssue`. That table carries one row per
+  // cause and **reuses** it when a cause recurs — a fresh `openedAt`, a cleared
+  // `resolvedAt`, on the same row — which is right for "what is wrong now" and
+  // destroys the previous episode. These two record the transitions so an order
+  // held, fixed, and held again reads as three things rather than one.
+  //
+  // **Transitions only.** `openIssuesTx` deliberately leaves a row that never
+  // closed alone, because re-detecting a cause the merchant is already working
+  // through is not new information. These events hang off that same condition.
+  // Written on every detection instead, `BILLED_ORDER_NOT_FOUND` alone would add
+  // a row every thirty minutes forever — `reconcileUnresolvedOrderIds` keeps
+  // finding the same order, and opening an advisory cause does not resolve the
+  // processing record it selects on.
+  //
+  // `data` carries `code` and `blocksProcessing` — values for the copy, never a
+  // sentence. The merchant-facing name for each code lives with the other
+  // vocabulary, in `releaseOrderEventDisplay.ts`.
+  //
+  // **Still nothing may read these to decide anything.** The order's current
+  // state is the issue row; these are its history. In particular they are not
+  // countable: the writes are best-effort by design (see the model docstring)
+  // and the timeline read is capped, so "how many orders are held" asked here
+  // would be wrong where `ReleaseOrderIssue` already answers it correctly.
+  ISSUE_OPENED
+  ISSUE_RESOLVED
+
+  // --- what we worked out --------------------------------------------------
+  // Two values, because `SHIPPING_RESOLVED` was two facts under one name and
+  // "resolved" meant the *rate* got settled, not that a problem was fixed.
+  //
+  // `data` on both carries the payload `captureShippingResolution` already
+  // builds: outcome, requested, resolved code/title/source, cost.
+  /// We charged a rate other than the one asked for — the cheapest-fallback
+  /// branch fired and something had been requested, or a member preference this
+  /// release does not offer.
+  ///
+  /// **Nothing is held**, and an **advisory** `SHIPPING_RATE_SUBSTITUTED` cause is
+  /// raised alongside: the order is billable, but the event alone reached no
+  /// surface a merchant looks at. This explains a delivery price the merchant did
+  /// not expect, which the order row cannot — it keeps what was charged, never
+  /// what was requested. It is the *only* shipping event a newly created order can
+  /// get, since a new order has no cause to have fixed.
+  ///
+  /// Not raised when no rate resolved at all: the order is held charging nothing,
+  /// so there is no substitution to report.
+  ///
+  /// Not "backup rate": Shopify's own `backup_rate` prediction is the thing this
+  /// codebase refuses, holding the order instead (`carrier_no_quote`).
+  SHIPPING_RATE_SUBSTITUTED
+  /// The order had no usable shipping rate and now has one — the transition a
+  /// merchant waits for after "Recalculate shipping".
+  ///
+  /// Overlaps `ISSUE_RESOLVED` on the three codes in `SHIPPING_ISSUE_CODES`, and
+  /// deliberately is not folded into it: `shippingIsResolved` is the stricter
+  /// test — a non-blank rate *and* a title *and* an order that is actually
+  /// shipping *and* no new shipping cause raised in the same pass. An order moved
+  /// to pickup, or a pass that closes `CARRIER_RATE_UNAVAILABLE` while opening
+  /// `MISSING_SHIPPING_RATE`, closes a cause with no rate to show for it. Both
+  /// used to report a resolved rate on an order that had none.
+  ///
+  /// So `ISSUE_RESOLVED` says the cause closed; this says it genuinely worked.
+  SHIPPING_RATE_FOUND
+
+  // --- setting up the payment ----------------------------------------------
+  /// Written by **every** path that creates a contract — the bulk batch, late
+  /// signup, and the merchant's own button. `contractGeneratedAt` records
+  /// *when* and stays the column surfaces read; this records *which path and
+  /// who*, which the column cannot answer. Covering only the batch would
+  /// reproduce the drift #1032 fixed, in a new table.
+  CONTRACT_CREATED
+  /// The other half of the pair. Without it the timeline shows a payment
+  /// scheduled and never that it was called off, which reads as a member still
+  /// due to be charged.
+  ///
+  /// **Only written when Shopify actually accepted the cancel.** Every cancel
+  /// site is best-effort and keeps `platformContractId` when Shopify refuses,
+  /// precisely so a live contract is not forgotten; claiming here that payment
+  /// is off for an order Shopify could still bill would hide that.
+  /// `data.reason` says what prompted it — the cause itself is its own event
+  /// immediately before this one.
+  CONTRACT_CANCELLED
+  /// A merchant's edit reached Shopify.
+  ///
+  /// The dispatch pair records that the sync was *queued*; this records that it
+  /// landed, which is a different fact and the one a merchant asking "did my
+  /// address change go through?" needs. Without it the answer is the absence of
+  /// a `CONTRACT_SYNC_FAILED` cause — inferring success from the lack of a
+  /// failure, which is the habit this table exists to break.
+  ///
+  /// `data.synced` lists what was sent (delivery, attributes, payment method).
+  CONTRACT_SYNCED
+
+  // --- what the shop wrote down ---------------------------------------------
+  // Three types rather than one with a direction, for the same reason
+  // MEMBER_SKIPPED and MEMBER_UNSKIPPED are two: adding a note and taking one
+  // away are different facts, and a merchant reading the timeline wants to see
+  // which happened without decoding a payload.
+  //
+  // The note's text is deliberately **not** in `data`. It lives in
+  // `ReleaseOrderNote`, where it can be edited and where a redaction request can
+  // reach it — copying it here would put an unreachable snapshot of a member's
+  // personal data in a table nothing may modify. `data.sendToShopify` records
+  // whether it was one of the notes that travels, which is the part that changes
+  // what the member's order says.
+  MERCHANT_NOTE_ADDED
+  MERCHANT_NOTE_EDITED
+  MERCHANT_NOTE_REMOVED
+
+  /// A charge landed on an order the shop had written off.
+  ///
+  /// The event exists because nothing else on the order can say it. The
+  /// processing record says Shopify charged the card — which is true and is all
+  /// Shopify said — and the `CLOSED_OUT` event says the shop ended the order.
+  /// Neither carries the fact that they happened in that order, which is the
+  /// whole problem: a member paid for wine nobody is sending.
+  ///
+  /// `data` carries `platformOrderId` (null when the webhook and its poll never
+  /// produced one) and `platformBillingAttemptId`.
+  CHARGED_AFTER_CLOSE_OUT
+
+  // --- money going back ----------------------------------------------------
+  /// Money returned on an order we already charged. Recorded when the order's
+  /// refund totals actually change, so a replayed `refunds/create` webhook is
+  /// silent but a corrected amount is not.
+  ///
+  /// `data` carries figures, never a sentence: this refund's `amount`, the new
+  /// cumulative `refundedAmount` and `refundedQuantity`, and `currencyCode`.
+  /// The per-refund detail stays in `ReleaseOrderRefund` — this says only that
+  /// the order changed and by how much.
+  REFUNDED
+
+  // --- whether the background work ran -------------------------------------
+  // An order handed to the worker and never processed is otherwise
+  // indistinguishable from one that was never handed over. A dispatch that
+  // fails writes DISPATCH_FAILED with no `jobId`, so the timeline shows a
+  // merchant action with no system event following it.
+  WORKER_JOB_DISPATCHED
+  WORKER_JOB_DISPATCH_FAILED
+}
+
+/// A note the **shop** wrote about one release order.
+///
+/// The one place on a release order where a person's own words are stored, and
+/// the reason `ReleaseOrder.notes` can go: that column mixed machine diagnostics
+/// with the only writable space a merchant had. Diagnostics are now events and
+/// causes; this is the notepad.
+///
+/// **Two concepts, one table, told apart by `sendToShopify`.** An internal note
+/// never leaves the dashboard. A note with the flag set is concatenated into the
+/// subscription contract's `note`, which Shopify applies to the order that
+/// billing generates — so it reaches whoever packs the box. One table because the
+/// merchant writes both in the same form with a checkbox, and two parallel
+/// columns would be two things for the UI to keep in step.
+///
+/// **A row, not an array entry.** `notes` proved what a bare `String[]` costs:
+/// no author, no timestamp, and no handle on any single entry, so "delete the
+/// second one" is an index that shifts under a colleague editing at the same
+/// time. Several notes coexisting is current state, so it needs rows — the
+/// history of who wrote and changed them is in `ReleaseOrderEvent`, and nothing
+/// reads those events to work out what the notes currently are.
+model ReleaseOrderNote {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  releaseOrderId String
+  releaseOrder   ReleaseOrder @relation(fields: [releaseOrderId], references: [id], onDelete: Cascade)
+
+  /// The merchant's words, as typed. Never machine-generated prose — that is
+  /// what `notes` was, and why it could not be translated or parsed.
+  body String
+
+  /// Whether this note is sent to Shopify, where it lands on the order billing
+  /// creates. False is internal-only and is the default, because sending a
+  /// member's words onward should be a deliberate tick rather than a surprise.
+  ///
+  /// It can only travel while the contract is still the thing that drives the
+  /// order. After billing, the note is on a real Shopify order and the contract
+  /// cannot reach it — so a later edit changes what the dashboard shows and
+  /// nothing else, which the UI says plainly.
+  sendToShopify Boolean @default(false)
+
+  /// Null everywhere today: the app does not enable online tokens, so no
+  /// dashboard action knows which member of staff performed it. Same gap as
+  /// `ReleaseOrder.closedOutBy` and `ReleaseOrderEvent.actorLabel`. Here now so
+  /// the data is right the day identity is threaded, rather than invented.
+  createdBy String?
+
+  /// Removed by the merchant, and kept.
+  ///
+  /// A note can be the only record of what a member asked for, so a mis-click
+  /// must not destroy it and support needs to see what an order was told. Every
+  /// merchant-facing read filters `archivedAt: null`; so does the contract push,
+  /// which means removing a sent note rewrites the contract without it.
+  ///
+  /// **Retained, not immortal.** These bodies hold personal data — a name, a
+  /// neighbour, a phone number — and `handleCustomerRedact` anonymises the
+  /// `ClubCustomer` while deliberately keeping the order. So the redact path
+  /// clears note bodies for that member's orders, archived rows included.
+  /// Without that, archiving would quietly build a store of personal data
+  /// nothing could erase on request.
+  archivedAt DateTime?
+
+  /// The merchant-facing read is "this order's live notes", and the contract
+  /// push narrows the same set by `sendToShopify`.
+  @@index([releaseOrderId, archivedAt])
+}
+
 model ReleaseOrderProcessingRecord {
-  id                                   String       @id @default(cuid())
-  createdAt                            DateTime     @default(now())
-  updatedAt                            DateTime     @updatedAt
+  id                                   String              @id @default(cuid())
+  createdAt                            DateTime            @default(now())
+  updatedAt                            DateTime            @updatedAt
   releaseOrderId                       String
-  releaseOrder                         ReleaseOrder @relation(fields: [releaseOrderId], references: [id], onDelete: Cascade)
+  releaseOrder                         ReleaseOrder        @relation(fields: [releaseOrderId], references: [id], onDelete: Cascade)
   key                                  String? // unique key for the processing attempt, eg "initial_payment_attempt", "retry_1" etc
   completedAt                          DateTime?
   nextActionUrl                        String? // eg a url to redirect the customer to complete payment - update on webhook
   platformSubscriptionBillingAttemptId String? // if a billing attempt has been made for the subscription. errors can be recorded at contract generation or billing attempt
   platformErrorCode                    String?
   errorData                            Json?
-  success                              Boolean      @default(false)
-  processingAttempt                    Int          @default(1) // incremented each time an attempt is made to process the order
+  success                              Boolean             @default(false)
+  processingAttempt                    Int                 @default(1) // incremented each time an attempt is made to process the order
+  /// Events *about* this receipt. The timeline renders the receipt itself; an
+  /// event links to it rather than restating its outcome.
+  events                               ReleaseOrderEvent[]
 }
 
 /// Why a release order is blocked — the structured counterpart to the bare
@@ -639,26 +1059,22 @@ model ReleaseOrderProcessingRecord {
 /// One row per (order, code): a recurrence reopens the existing row rather than
 /// appending. Per-attempt history belongs in `ReleaseOrderProcessingRecord`.
 model ReleaseOrderIssue {
-  id               String                        @id @default(cuid())
-  createdAt        DateTime                      @default(now())
-  updatedAt        DateTime                      @updatedAt
+  id               String                       @id @default(cuid())
+  createdAt        DateTime                     @default(now())
+  updatedAt        DateTime                     @updatedAt
   releaseOrderId   String
-  releaseOrder     ReleaseOrder                  @relation(fields: [releaseOrderId], references: [id], onDelete: Cascade)
+  releaseOrder     ReleaseOrder                 @relation(fields: [releaseOrderId], references: [id], onDelete: Cascade)
   code             ReleaseOrderIssueCode
   /// The specifics behind the code — which fields were missing, the upstream
   /// error message. What `notes[]` was carrying, attached to a cause.
   detail           String?
   /// Whether this cause holds the order out of contract generation and billing.
   /// False for advisory causes that are worth surfacing but do not block.
-  blocksProcessing Boolean                       @default(true)
-  openedAt         DateTime                      @default(now())
+  blocksProcessing Boolean                      @default(true)
+  openedAt         DateTime                     @default(now())
   /// Null while outstanding. Set when the cause is no longer detected.
   resolvedAt       DateTime?
   resolvedBy       ReleaseOrderIssueResolvedBy?
-  /// Merchant triage, per **issue** rather than per order — an order blocked for
-  /// two reasons can have one dealt with and one not, which
-  /// `ReleaseOrder.highlightedIssueMerchantState` cannot express.
-  merchantState    HighlightedIssueMerchantState @default(OPEN)
 
   @@unique([releaseOrderId, code])
   @@index([releaseOrderId, resolvedAt])
@@ -675,6 +1091,20 @@ enum ReleaseOrderIssueCode {
   /// carrier timed out — so the merchant's repair is "recalculate", not "correct
   /// the address". See documentation/reference/releases/shipping-rate-identity.md.
   CARRIER_RATE_UNAVAILABLE
+  /// The order is priced on a rate nobody asked for: the requested rate was not
+  /// available and the cheapest was charged, or the member's saved rate is not
+  /// offered on this release.
+  ///
+  /// **Advisory** (`blocksProcessing: false`) — the order is billable and holding
+  /// it would be worse than the wrong price. It exists so the merchant can *see*
+  /// it: before this the only trace was one line on the order's own timeline, and
+  /// a member charged a rate the release never configured reached no surface
+  /// anybody looks at.
+  ///
+  /// Not raised for a carrier-source match. "Vinoshipper" is a delivery profile
+  /// rather than a rate, so resolving it to the cheapest of that carrier's own
+  /// rates is a legitimate match, not a substitution.
+  SHIPPING_RATE_SUBSTITUTED
   INCOMPLETE_SHIPPING_DETAILS
   MISSING_PHONE
   MISSING_PICKUP_LOCATION
@@ -698,6 +1128,42 @@ enum ReleaseOrderIssueCode {
   /// offer close-out for a state that otherwise has no action at all.
   /// See `documentation/reference/releases/stuck-releases-risks.md` §5.1.
   BILLED_ORDER_NOT_FOUND
+  /// The Compliance app ran its prepurchase check and refused — wrong state for
+  /// the product, a minimum-quantity rule, an age-verification failure. Advisory
+  /// (`blocksProcessing: false`): the documented rule is that a failed check
+  /// does not hold the order, it bills and the errors are surfaced.
+  /// A charge completed on an order the merchant had already written off.
+  ///
+  /// Only reachable one way: a 3DS challenge the member completes after the
+  /// close-out. Shopify sends no webhook at all while a challenge is open, so
+  /// the order looks settled from here and close-out is the exit a merchant
+  /// reaches for — then the member authenticates weeks later and the charge goes
+  /// through. The contract was cancelled, so nothing *we* did asked for it.
+  ///
+  /// Advisory (`blocksProcessing: false`): there is no processing left to hold.
+  /// The order has a Shopify order and a write-off, and what it needs is the
+  /// money returned, not re-entry into contract generation or billing.
+  ///
+  /// Note this cause does **not** reach Highlighted Issues, which excludes
+  /// closed-out orders on purpose — close-out is meant to be the end of an
+  /// order. It is read on the order's own page.
+  CHARGED_AFTER_CLOSE_OUT
+  COMPLIANCE_CHECK_FAILED
+  /// We tried to ask the Compliance service and could not reach it, so no check
+  /// ran and no fee was calculated. Distinct from a failure: the order is not
+  /// known to be non-compliant, we simply have no answer. Advisory for the same
+  /// reason, and the state `complianceCheckValid: null` records on the row.
+  ///
+  /// **Only a failed attempt.** `getComplianceCheck` returns `skippedNoApp`,
+  /// `skippedNoProducts` and `skippedNoDob` when a check was never appropriate —
+  /// the merchant has no Compliance app, nothing in the order ships, or there is
+  /// no date of birth on file. None of those raise this, because nothing is
+  /// wrong: most orders on most shops legitimately have no compliance check.
+  ///
+  /// This is the state that used to be invisible — the Highlighted Issues query
+  /// matched only `complianceCheckValid: false`, so 15 production orders left
+  /// unchecked by a 2026-09 outage never appeared anywhere.
+  COMPLIANCE_CHECK_UNAVAILABLE
   /// Backfilled onto rows flagged before issues existed, where the cause cannot
   /// be recovered. Renders as today's generic "Pre-processing checks failed".
   LEGACY_UNKNOWN
