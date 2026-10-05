@@ -13,9 +13,22 @@ import {
 import { ButtonLink } from '@/app/components/ButtonLink';
 import { clubsMerchantStatusMetaData } from '@/lib/metaData';
 import { merchantEmailLogHeaders } from '@/lib/emailLogs';
+import type { RadixColor } from '@/types/radix-ui';
+
+const recentReleaseTake = 10;
+
+const releaseStatusColor: Record<string, RadixColor> = {
+  draft: 'gray',
+  published: 'green',
+  archived: 'orange',
+};
 
 const ClubActions = ({ id, merchantId }: { id: string; merchantId: number }) => (
   <ButtonLink href={`/clubs/merchants/${merchantId}/clubs/${id}`}>View</ButtonLink>
+);
+
+const ReleaseActions = ({ releaseHref }: { releaseHref: string }) => (
+  <ButtonLink href={releaseHref}>View</ButtonLink>
 );
 
 export default async function Page(props: { params: Promise<{ merchantId: string }> }) {
@@ -81,19 +94,51 @@ export default async function Page(props: { params: Promise<{ merchantId: string
     club.archived || club.status === 'archived';
   const clubs = [...merchant.Club].sort((a, b) => Number(isArchived(a)) - Number(isArchived(b)));
 
-  const emailLogs = await prismaClubs.merchantEmailLog.findMany({
-    where: { shop: merchant.shop },
-    orderBy: { createdAt: 'desc' },
-    take: 10,
-    select: {
-      id: true,
-      emailType: true,
-      sentTo: true,
-      success: true,
-      retryable: true,
-      error: true,
-      createdAt: true,
-    },
+  const releaseWhere = { club: { merchantId } };
+  const [emailLogs, recentReleases, releaseCount] = await Promise.all([
+    prismaClubs.merchantEmailLog.findMany({
+      where: { shop: merchant.shop },
+      orderBy: { createdAt: 'desc' },
+      take: 10,
+      select: {
+        id: true,
+        emailType: true,
+        sentTo: true,
+        success: true,
+        retryable: true,
+        error: true,
+        createdAt: true,
+      },
+    }),
+    prismaClubs.release.findMany({
+      where: releaseWhere,
+      orderBy: { releaseDate: 'desc' },
+      take: recentReleaseTake,
+      select: {
+        id: true,
+        name: true,
+        status: true,
+        releaseDate: true,
+        customizationDeadline: true,
+        clubId: true,
+        club: { select: { name: true } },
+        _count: { select: { ReleaseOrder: true } },
+      },
+    }),
+    prismaClubs.release.count({ where: releaseWhere }),
+  ]);
+
+  const releaseRows = recentReleases.map((release) => {
+    const clubHref = `/clubs/merchants/${merchantId}/clubs/${release.clubId}`;
+    const releaseHref = `${clubHref}/releases/${release.id}`;
+
+    return {
+      ...release,
+      clubName: release.club.name,
+      clubHref,
+      releaseHref,
+      orderCount: release._count.ReleaseOrder,
+    };
   });
 
   const statusMeta = clubsMerchantStatusMetaData[merchant.status] ?? {
@@ -115,6 +160,36 @@ export default async function Page(props: { params: Promise<{ merchantId: string
       formatter: (value: number) => (value ? `$${value.toFixed(2)}` : '—'),
     },
     { id: 'createdAt', title: 'Created', formatter: dateFormatter },
+    { type: 'actions' as const, title: 'Actions' },
+  ];
+
+  const releaseHeaders = [
+    {
+      id: 'name',
+      title: 'Release',
+      href: (_v: string, row: any) => row.releaseHref,
+    },
+    {
+      id: 'clubName',
+      title: 'Club',
+      href: (_v: string, row: any) => row.clubHref,
+    },
+    {
+      id: 'status',
+      title: 'Status',
+      formatter: (value: string) => (
+        <Badge color={releaseStatusColor[value] ?? 'gray'} variant="soft">
+          {value}
+        </Badge>
+      ),
+    },
+    { id: 'releaseDate', title: 'Release Date', formatter: dateFormatter },
+    { id: 'customizationDeadline', title: 'Customization Closes', formatter: dateTimeFormatter },
+    {
+      id: 'orderCount',
+      title: 'Orders',
+      href: (_v: number, row: any) => `${row.releaseHref}/orders`,
+    },
     { type: 'actions' as const, title: 'Actions' },
   ];
 
@@ -280,6 +355,25 @@ export default async function Page(props: { params: Promise<{ merchantId: string
         </Flex>
         <DataTable headers={clubHeaders} data={clubs} Actions={ClubActions} />
       </Box>
+
+      {releaseRows.length > 0 && (
+        <Box mb="6">
+          <Flex justify="between" align="center" mb="3">
+            <Heading size="4">Recent Releases ({releaseCount})</Heading>
+            {releaseCount > recentReleaseTake && (
+              <ButtonLink href={`/clubs/releases?merchant=${merchantId}`} variant="soft">
+                View all
+              </ButtonLink>
+            )}
+          </Flex>
+          <DataTable headers={releaseHeaders} data={releaseRows} Actions={ReleaseActions} />
+          {releaseCount > recentReleaseTake && (
+            <Text size="1" color="gray" mt="2" as="p">
+              Showing latest {recentReleaseTake} of {releaseCount} releases.
+            </Text>
+          )}
+        </Box>
+      )}
 
       <Box>
         <Heading size="4" mb="3">

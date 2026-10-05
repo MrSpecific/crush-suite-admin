@@ -22,9 +22,20 @@ const Actions = ({ id, merchantId, clubId }: { id: string; merchantId: number; c
 
 export default async function Page(props: { searchParams: Promise<PageSearchParams> }) {
   const searchParams = await props.searchParams;
-  const { page, search, status } = searchParams;
-  const where = getReleaseWhere(search?.toString(), status?.toString());
-  const count = await prismaClubs.release.count({ where });
+  const { page, search, status, merchant } = searchParams;
+  const where = getReleaseWhere(
+    search?.toString(),
+    status?.toString(),
+    merchant ? parseInt(merchant.toString()) : undefined,
+  );
+  const [count, merchants] = await Promise.all([
+    prismaClubs.release.count({ where }),
+    prismaClubs.merchant.findMany({
+      where: { Club: { some: {} } },
+      orderBy: { shop: 'asc' },
+      select: { id: true, shop: true, platformShopName: true },
+    }),
+  ]);
   const releases = await prismaClubs.release.findMany({
     ...queryPagination({ page, count }),
     where,
@@ -66,6 +77,12 @@ export default async function Page(props: { searchParams: Promise<PageSearchPara
         { label: 'Published', value: 'published' },
         { label: 'Archived', value: 'archived' },
       ],
+    },
+    {
+      label: 'Merchant',
+      name: 'merchant',
+      allLabel: 'All Merchants',
+      options: merchants.map((m) => ({ label: m.platformShopName ?? m.shop, value: m.id.toString() })),
     },
   ];
 
@@ -129,8 +146,16 @@ export default async function Page(props: { searchParams: Promise<PageSearchPara
   );
 }
 
-const getReleaseWhere = (search?: string, status?: string): Prisma.ReleaseWhereInput | undefined => {
+const getReleaseWhere = (
+  search?: string,
+  status?: string,
+  merchantId?: number,
+): Prisma.ReleaseWhereInput | undefined => {
   const conditions: Prisma.ReleaseWhereInput[] = [];
+
+  if (merchantId !== undefined && !isNaN(merchantId)) {
+    conditions.push({ club: { merchantId } });
+  }
 
   if (status) {
     conditions.push({ status: status as Prisma.ReleaseWhereInput['status'] });
