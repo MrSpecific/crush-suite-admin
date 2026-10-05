@@ -8,33 +8,12 @@ import { dateFormatter, dateTimeFormatter } from '@/lib/formatters';
 import { ButtonLink } from '@/app/components/ButtonLink';
 import { Badge } from '@radix-ui/themes';
 import { DeliveryMethod, Prisma } from '@/generated/prisma/clubs';
-import type { RadixColor } from '@/types/radix-ui';
-
-// Release order status isn't stored, it's derived from the order's fields. Each
-// filter here must agree with the badge logic in getOrderStatus below.
-const statusWhere: Record<string, Prisma.ReleaseOrderWhereInput> = {
-  pending: { skippedAt: null, closedOutAt: null, platformOrderId: null, preProcessingError: false },
-  blocked: { skippedAt: null, closedOutAt: null, platformOrderId: null, preProcessingError: true },
-  ordered: { skippedAt: null, closedOutAt: null, platformOrderId: { not: null } },
-  refunded: { refundedAmount: { gt: 0 } },
-  skipped: { skippedAt: { not: null } },
-  closed_out: { closedOutAt: { not: null } },
-};
-
-const getOrderStatus = (order: {
-  skippedAt: Date | null;
-  closedOutAt: Date | null;
-  platformOrderId: string | null;
-  preProcessingError: boolean;
-  refundedAmount: number;
-}): { label: string; color: RadixColor } => {
-  if (order.closedOutAt) return { label: 'Closed Out', color: 'red' };
-  if (order.skippedAt) return { label: 'Skipped', color: 'gray' };
-  if (order.platformOrderId && order.refundedAmount > 0) return { label: 'Refunded', color: 'purple' };
-  if (order.platformOrderId) return { label: 'Ordered', color: 'green' };
-  if (order.preProcessingError) return { label: 'Blocked', color: 'amber' };
-  return { label: 'Pending', color: 'orange' };
-};
+import {
+  getReleaseOrderStatus,
+  releaseOrderStatusOptions,
+  releaseOrderStatusSelect,
+  releaseOrderStatusWhere,
+} from '@/lib/releaseOrderStatus';
 
 const Actions = ({ orderHref }: { orderHref: string }) => <ButtonLink href={orderHref}>View</ButtonLink>;
 
@@ -62,13 +41,9 @@ export default async function Page(props: { searchParams: Promise<PageSearchPara
     where,
     orderBy: { createdAt: 'desc' },
     select: {
+      ...releaseOrderStatusSelect,
       id: true,
-      platformOrderId: true,
       orderCreatedAt: true,
-      skippedAt: true,
-      closedOutAt: true,
-      preProcessingError: true,
-      refundedAmount: true,
       deliveryMethod: true,
       total: true,
       currencyCode: true,
@@ -118,14 +93,7 @@ export default async function Page(props: { searchParams: Promise<PageSearchPara
     {
       label: 'Status',
       name: 'status',
-      options: [
-        { label: 'Pending', value: 'pending' },
-        { label: 'Blocked', value: 'blocked' },
-        { label: 'Ordered', value: 'ordered' },
-        { label: 'Refunded', value: 'refunded' },
-        { label: 'Skipped', value: 'skipped' },
-        { label: 'Closed Out', value: 'closed_out' },
-      ],
+      options: releaseOrderStatusOptions,
     },
     {
       label: 'Delivery',
@@ -159,7 +127,7 @@ export default async function Page(props: { searchParams: Promise<PageSearchPara
       id: 'skippedAt',
       title: 'Status',
       formatter: (_v: unknown, row: any) => {
-        const { label, color } = getOrderStatus(row);
+        const { label, color } = getReleaseOrderStatus(row);
         return (
           <Badge color={color} variant="soft">
             {label}
@@ -240,11 +208,11 @@ const getOrderWhere = ({
 }): Prisma.ReleaseOrderWhereInput | undefined => {
   const conditions: Prisma.ReleaseOrderWhereInput[] = [];
 
-  if (status && statusWhere[status]) {
-    conditions.push(statusWhere[status]);
+  if (status && Object.hasOwn(releaseOrderStatusWhere, status)) {
+    conditions.push(releaseOrderStatusWhere[status]);
   }
 
-  if (delivery && delivery in DeliveryMethod) {
+  if (delivery && Object.hasOwn(DeliveryMethod, delivery)) {
     conditions.push({ deliveryMethod: delivery as DeliveryMethod });
   }
 

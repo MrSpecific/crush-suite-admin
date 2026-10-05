@@ -31,6 +31,8 @@ import {
 
 // Rows shown per list on this page; the full lists are paginated on their own pages
 const previewTake = 20;
+// Inventory adjustments are an append-only audit, so only the latest are shown
+const adjustmentTake = 50;
 
 const statusColor: Record<string, RadixColor> = {
   published: 'green',
@@ -101,8 +103,9 @@ export default async function Page(
       giftNote: true,
       // inventory / processing status
       inventoryReserved: true,
+      inventoryReservedAt: true,
       inventoryUnreserved: true,
-      inventoryReservedForMemberCount: true,
+      inventoryUnreservedAt: true,
       inventoryError: true,
       allReleaseOrdersCreated: true,
       allReleaseOrdersCreatedAt: true,
@@ -148,8 +151,37 @@ export default async function Page(
           minSubtotal: true,
         },
       },
+      ReleaseInventoryReservation: {
+        orderBy: { createdAt: 'asc' },
+        select: {
+          id: true,
+          releaseProductId: true,
+          platformInventoryItemId: true,
+          platformLocationId: true,
+          requiredQuantity: true,
+          quantityReserved: true,
+          quantityUnreserved: true,
+          deficit: true,
+          reservedAt: true,
+          unreservedAt: true,
+        },
+      },
+      ReleaseInventoryAdjustment: {
+        orderBy: { createdAt: 'desc' },
+        take: adjustmentTake,
+        select: {
+          id: true,
+          createdAt: true,
+          releaseProductId: true,
+          platformInventoryItemId: true,
+          platformLocationId: true,
+          platformAdjustmentGroupId: true,
+          direction: true,
+          quantity: true,
+        },
+      },
       _count: {
-        select: { ReleaseOrder: true },
+        select: { ReleaseOrder: true, ReleaseInventoryAdjustment: true },
       },
     },
   });
@@ -245,6 +277,83 @@ export default async function Page(
       id: 'excludeFromDiscounts',
       title: 'Excl. Discounts',
       formatter: (value: boolean) => (value ? 'Yes' : '—'),
+    },
+  ];
+
+  // Adjustments keep releaseProductId as a plain column so they outlive a deleted
+  // ReleaseProduct — fall back to the raw id when the product is gone
+  const productNameById = new Map(productRows.map((p) => [p.id, p.name]));
+  const productName = (releaseProductId: string) => productNameById.get(releaseProductId) ?? releaseProductId;
+
+  const reservationRows = release.ReleaseInventoryReservation.map((r) => ({
+    ...r,
+    productName: productName(r.releaseProductId),
+  }));
+  const adjustmentRows = release.ReleaseInventoryAdjustment.map((a) => ({
+    ...a,
+    productName: productName(a.releaseProductId),
+  }));
+
+  const reservationHeaders = [
+    { id: 'productName', title: 'Product' },
+    { id: 'platformInventoryItemId', title: 'Inventory Item', as: 'code' as const },
+    { id: 'platformLocationId', title: 'Location', as: 'code' as const },
+    {
+      id: 'requiredQuantity',
+      title: 'Required',
+      // 0 means the reconcile has never visited this row, not that nothing is required
+      formatter: (v: number) =>
+        v > 0 ? v : (
+          <Badge color="gray" variant="soft">
+            Not reconciled
+          </Badge>
+        ),
+    },
+    { id: 'quantityReserved', title: 'Reserved' },
+    {
+      id: 'deficit',
+      title: 'Deficit',
+      formatter: (v: number) =>
+        v > 0 ? (
+          <Badge color="red" variant="soft">
+            {v}
+          </Badge>
+        ) : (
+          '—'
+        ),
+    },
+    { id: 'quantityUnreserved', title: 'Unreserved' },
+    { id: 'reservedAt', title: 'Reserved At', formatter: (v: Date | null) => (v ? dateTimeFormatter(v) : '—') },
+    { id: 'unreservedAt', title: 'Unreserved At', formatter: (v: Date | null) => (v ? dateTimeFormatter(v) : '—') },
+  ];
+
+  const adjustmentHeaders = [
+    { id: 'createdAt', title: 'When', formatter: dateTimeFormatter },
+    { id: 'productName', title: 'Product' },
+    {
+      id: 'direction',
+      title: 'Direction',
+      formatter: (v: string) => (
+        <Badge color={v === 'reserve' ? 'blue' : 'orange'} variant="soft">
+          {v}
+        </Badge>
+      ),
+    },
+    { id: 'quantity', title: 'Qty' },
+    { id: 'platformInventoryItemId', title: 'Inventory Item', as: 'code' as const },
+    { id: 'platformLocationId', title: 'Location', as: 'code' as const },
+    {
+      id: 'platformAdjustmentGroupId',
+      title: 'Adjustment Group',
+      // Null means the move was inferred from stock figures, never confirmed by Shopify
+      formatter: (v: string | null) =>
+        v ? (
+          <code>{v}</code>
+        ) : (
+          <Badge color="amber" variant="soft">
+            Unconfirmed
+          </Badge>
+        ),
     },
   ];
 
@@ -427,8 +536,8 @@ export default async function Page(
                   ),
                 },
                 {
-                  label: 'Reserved For',
-                  value: `${release.inventoryReservedForMemberCount} member(s)`,
+                  label: 'Inventory Reserved At',
+                  value: release.inventoryReservedAt ? dateTimeFormatter(release.inventoryReservedAt) : undefined,
                 },
                 {
                   label: 'Inventory Unreserved',
@@ -437,6 +546,10 @@ export default async function Page(
                       {release.inventoryUnreserved ? 'Yes' : 'No'}
                     </Badge>
                   ),
+                },
+                {
+                  label: 'Inventory Unreserved At',
+                  value: release.inventoryUnreservedAt ? dateTimeFormatter(release.inventoryUnreservedAt) : undefined,
                 },
               ]}
             />
@@ -467,6 +580,30 @@ export default async function Page(
           </Text>
         )}
       </Box>
+
+      {/* Inventory */}
+      {reservationRows.length > 0 && (
+        <Box mb="6">
+          <Heading size="4" mb="3">
+            Inventory Reservations ({reservationRows.length})
+          </Heading>
+          <DataTable headers={reservationHeaders} data={reservationRows} />
+        </Box>
+      )}
+
+      {adjustmentRows.length > 0 && (
+        <Box mb="6">
+          <Heading size="4" mb="3">
+            Inventory Adjustments ({release._count.ReleaseInventoryAdjustment})
+          </Heading>
+          <DataTable headers={adjustmentHeaders} data={adjustmentRows} />
+          {release._count.ReleaseInventoryAdjustment > adjustmentTake && (
+            <Text size="1" color="gray" mt="2" as="p">
+              Showing latest {adjustmentTake} of {release._count.ReleaseInventoryAdjustment} adjustments.
+            </Text>
+          )}
+        </Box>
+      )}
 
       {/* Discounts */}
       {release.releaseDiscounts.length > 0 && (

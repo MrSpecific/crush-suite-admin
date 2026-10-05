@@ -3,6 +3,7 @@ import { ButtonLink } from '@/app/components/ButtonLink';
 import { Badge } from '@radix-ui/themes';
 import { dateFormatter, dateTimeFormatter } from '@/lib/formatters';
 import { Prisma } from '@/generated/prisma/clubs';
+import { getReleaseOrderStatus, releaseOrderStatusSelect } from '@/lib/releaseOrderStatus';
 
 // Shared by the release detail page previews and the full order / not-yet-customized lists
 
@@ -54,11 +55,10 @@ export const getReleaseOrderWhere = (
   search ? { releaseId, clubCustomer: customerSearch(search) } : { releaseId };
 
 export const releaseOrderSelect = {
+  ...releaseOrderStatusSelect,
   id: true,
   platformCustomerId: true,
-  platformOrderId: true,
   orderCreatedAt: true,
-  skippedAt: true,
   deliveryMethod: true,
   subtotal: true,
   discountAmount: true,
@@ -89,10 +89,9 @@ export const releaseOrderHeaders = [
   {
     id: 'skippedAt',
     title: 'Status',
-    formatter: (skippedAt: Date | null, row: any) => {
-      if (skippedAt) return <Badge color="gray" variant="soft">Skipped</Badge>;
-      if (row.platformOrderId) return <Badge color="green" variant="soft">Ordered</Badge>;
-      return <Badge color="orange" variant="soft">Pending</Badge>;
+    formatter: (_v: unknown, row: any) => {
+      const { label, color } = getReleaseOrderStatus(row);
+      return <Badge color={color} variant="soft">{label}</Badge>;
     },
   },
   { id: 'platformOrderId', title: 'Order ID', as: 'code' as const },

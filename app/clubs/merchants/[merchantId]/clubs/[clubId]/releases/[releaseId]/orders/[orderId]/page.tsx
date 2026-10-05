@@ -7,6 +7,17 @@ import { NotFound } from '@/app/components/NotFound';
 import { Badge, Box, Card, Grid, Heading, Text } from '@radix-ui/themes';
 import { dateFormatter, dateTimeFormatter } from '@/lib/formatters';
 import type { RadixColor } from '@/types/radix-ui';
+import { getReleaseOrderStatus, releaseOrderStatusSelect } from '@/lib/releaseOrderStatus';
+
+// Events are an append-only history, so only the latest are shown
+const eventTake = 100;
+
+const eventActorColor: Record<string, RadixColor> = {
+  CUSTOMER: 'blue',
+  MERCHANT: 'violet',
+  SYSTEM: 'gray',
+  SHOPIFY: 'green',
+};
 
 const money = (value: number | null | undefined, currency = 'USD') =>
   value != null
@@ -59,12 +70,16 @@ export default async function Page(
           shop: true,
         },
       },
+      ...releaseOrderStatusSelect,
       platformCustomerId: true,
-      platformOrderId: true,
       platformContractId: true,
+      contractCancelledAt: true,
       orderCreatedAt: true,
       customizedAt: true,
-      skippedAt: true,
+      closedOutBy: true,
+      closedOutReason: true,
+      refundedQuantity: true,
+      lastRefundedAt: true,
       deliveryMethod: true,
       deliveryAddress: true,
       deliveryPhone: true,
@@ -87,12 +102,50 @@ export default async function Page(
       customerShippingHoldUntil: true,
       customerNotes: true,
       giftNote: true,
-      notes: true,
-      preProcessingError: true,
       contractGeneratedAt: true,
       contractCreateAttemptedAt: true,
       attemptedFirstBillingAt: true,
-      highlightedIssuesListedAt: true,
+      issues: {
+        orderBy: [{ resolvedAt: { sort: 'desc', nulls: 'first' } }, { openedAt: 'desc' }],
+        select: {
+          id: true,
+          code: true,
+          detail: true,
+          blocksProcessing: true,
+          openedAt: true,
+          resolvedAt: true,
+          resolvedBy: true,
+        },
+      },
+      // Archived notes are kept for support, so show them alongside live ones
+      merchantNotes: {
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          createdAt: true,
+          updatedAt: true,
+          body: true,
+          sendToShopify: true,
+          createdBy: true,
+          archivedAt: true,
+        },
+      },
+      events: {
+        orderBy: { createdAt: 'desc' },
+        take: eventTake,
+        select: {
+          id: true,
+          createdAt: true,
+          type: true,
+          actor: true,
+          actorLabel: true,
+          data: true,
+          detail: true,
+          jobId: true,
+          processingRecordId: true,
+        },
+      },
+      _count: { select: { events: true } },
       products: {
         select: {
           id: true,
@@ -133,8 +186,7 @@ export default async function Page(
   const fullName = [order.clubCustomer.firstName, order.clubCustomer.lastName].filter(Boolean).join(' ') || '—';
   const merchantName = order.release.club.merchant.platformShopName ?? order.release.club.merchant.shop;
 
-  const status = order.skippedAt ? 'Skipped' : order.platformOrderId ? 'Ordered' : 'Pending';
-  const statusColor: RadixColor = order.skippedAt ? 'gray' : order.platformOrderId ? 'green' : 'orange';
+  const status = getReleaseOrderStatus(order);
 
   const productRows = order.products.map((p) => ({
     ...p,
@@ -181,6 +233,81 @@ export default async function Page(
     { id: 'createdAt', title: 'Created', formatter: dateTimeFormatter },
   ];
 
+  const issueHeaders = [
+    { id: 'code', title: 'Code', formatter: (v: string) => <code>{v}</code> },
+    {
+      id: 'blocksProcessing',
+      title: 'Type',
+      formatter: (v: boolean) => (
+        <Badge color={v ? 'red' : 'amber'} variant="soft">
+          {v ? 'Blocking' : 'Advisory'}
+        </Badge>
+      ),
+    },
+    { id: 'detail', title: 'Detail', formatter: (v: string | null) => v ?? '—' },
+    { id: 'openedAt', title: 'Opened', formatter: dateTimeFormatter },
+    {
+      id: 'resolvedAt',
+      title: 'Resolved',
+      formatter: (v: Date | null, row: any) =>
+        v ? (
+          `${dateTimeFormatter(v)}${row.resolvedBy ? ` (${titleCase(row.resolvedBy)})` : ''}`
+        ) : (
+          <Badge color="orange" variant="soft">
+            Open
+          </Badge>
+        ),
+    },
+  ];
+
+  const noteHeaders = [
+    { id: 'body', title: 'Note' },
+    {
+      id: 'sendToShopify',
+      title: 'Visibility',
+      formatter: (v: boolean) => (
+        <Badge color={v ? 'blue' : 'gray'} variant="soft">
+          {v ? 'Sent to Shopify' : 'Internal'}
+        </Badge>
+      ),
+    },
+    {
+      id: 'archivedAt',
+      title: 'Archived',
+      formatter: (v: Date | null) => (v ? dateTimeFormatter(v) : '—'),
+    },
+    { id: 'createdBy', title: 'By', formatter: (v: string | null) => v ?? '—' },
+    { id: 'updatedAt', title: 'Updated', formatter: dateTimeFormatter },
+    { id: 'createdAt', title: 'Created', formatter: dateTimeFormatter },
+  ];
+
+  const eventHeaders = [
+    { id: 'createdAt', title: 'When', formatter: dateTimeFormatter },
+    { id: 'type', title: 'Event', formatter: (v: string) => titleCase(v) },
+    {
+      id: 'actor',
+      title: 'Actor',
+      formatter: (v: string, row: any) => (
+        <Badge color={eventActorColor[v] ?? 'gray'} variant="soft">
+          {row.actorLabel ?? titleCase(v)}
+        </Badge>
+      ),
+    },
+    {
+      id: 'data',
+      title: 'Data',
+      formatter: (v: any) => (v ? <DataDialog title="Event Data" data={v} /> : '—'),
+    },
+    {
+      id: 'detail',
+      title: 'Detail',
+      formatter: (v: any) => (v ? <DataDialog title="Event Detail" data={v} /> : '—'),
+    },
+    { id: 'jobId', title: 'Job ID', formatter: (v: string | null) => (v ? <code>{v}</code> : '—') },
+  ];
+
+  const openBlockingIssues = order.issues.filter((i) => !i.resolvedAt && i.blocksProcessing).length;
+
   const backHref = `/clubs/merchants/${merchantId}/clubs/${clubId}/releases/${releaseId}`;
 
   return (
@@ -211,12 +338,19 @@ export default async function Page(
           <Heading size="3" mb="3">Order Status</Heading>
           <QuickDataList
             data={[
-              { label: 'Status', children: <Badge color={statusColor}>{status}</Badge> },
+              { label: 'Status', children: <Badge color={status.color}>{status.label}</Badge> },
               { label: 'Shopify Order ID', value: order.platformOrderId, as: 'code' },
               { label: 'Contract ID', value: order.platformContractId, as: 'code' },
+              {
+                label: 'Contract Cancelled',
+                value: order.contractCancelledAt ? dateTimeFormatter(order.contractCancelledAt) : undefined,
+              },
               { label: 'Ordered At', value: order.orderCreatedAt ? dateTimeFormatter(order.orderCreatedAt) : undefined },
               { label: 'Customized At', value: order.customizedAt ? dateTimeFormatter(order.customizedAt) : undefined },
               { label: 'Skipped At', value: order.skippedAt ? dateTimeFormatter(order.skippedAt) : undefined },
+              { label: 'Closed Out At', value: order.closedOutAt ? dateTimeFormatter(order.closedOutAt) : undefined },
+              { label: 'Closed Out By', value: order.closedOutBy },
+              { label: 'Close-Out Reason', value: order.closedOutReason },
               {
                 label: 'Contract Generated',
                 value: order.contractGeneratedAt ? dateTimeFormatter(order.contractGeneratedAt) : undefined,
@@ -227,7 +361,11 @@ export default async function Page(
               },
               {
                 label: 'Pre-Processing Error',
-                children: order.preProcessingError ? <Badge color="red">Yes</Badge> : undefined,
+                children: order.preProcessingError ? (
+                  <Badge color="red">
+                    Yes{openBlockingIssues > 0 ? ` — ${openBlockingIssues} open blocking issue(s)` : ''}
+                  </Badge>
+                ) : undefined,
               },
               { label: 'Created', value: dateFormatter(order.createdAt) },
               { label: 'Updated', value: dateFormatter(order.updatedAt) },
@@ -293,6 +431,17 @@ export default async function Page(
               },
               { label: 'Total', value: money(order.total, order.currencyCode), bold: true },
               {
+                label: 'Refunded',
+                value:
+                  order.refundedAmount > 0
+                    ? `${money(order.refundedAmount, order.currencyCode)} (${order.refundedQuantity} item(s))`
+                    : undefined,
+              },
+              {
+                label: 'Last Refunded',
+                value: order.lastRefundedAt ? dateTimeFormatter(order.lastRefundedAt) : undefined,
+              },
+              {
                 label: 'Compliance Check',
                 children:
                   order.complianceCheckValid == null ? undefined : (
@@ -306,17 +455,30 @@ export default async function Page(
         </Card>
       </Grid>
 
-      {(order.customerNotes || order.giftNote || order.notes.length > 0) && (
+      {(order.customerNotes || order.giftNote) && (
         <Card mb="6">
           <Heading size="3" mb="2">Notes</Heading>
           <QuickDataList
             data={[
               { label: 'Customer Notes', value: order.customerNotes },
               { label: 'Gift Note', value: order.giftNote },
-              { label: 'Notes', value: order.notes.length > 0 ? order.notes.join('; ') : undefined },
             ]}
           />
         </Card>
+      )}
+
+      {order.issues.length > 0 && (
+        <Box mb="6">
+          <Heading size="4" mb="3">Issues ({order.issues.length})</Heading>
+          <DataTable headers={issueHeaders} data={order.issues} />
+        </Box>
+      )}
+
+      {order.merchantNotes.length > 0 && (
+        <Box mb="6">
+          <Heading size="4" mb="3">Merchant Notes ({order.merchantNotes.length})</Heading>
+          <DataTable headers={noteHeaders} data={order.merchantNotes} />
+        </Box>
       )}
 
       <Box mb="6">
@@ -334,6 +496,22 @@ export default async function Page(
           <DataTable headers={recordHeaders} data={order.orderProcessingRecords} />
         ) : (
           <Text color="gray" size="2">No processing records yet.</Text>
+        )}
+      </Box>
+
+      <Box mt="6">
+        <Heading size="4" mb="3">Timeline ({order._count.events})</Heading>
+        {order.events.length > 0 ? (
+          <>
+            <DataTable headers={eventHeaders} data={order.events} />
+            {order._count.events > eventTake && (
+              <Text size="1" color="gray" mt="2" as="p">
+                Showing latest {eventTake} of {order._count.events} events.
+              </Text>
+            )}
+          </>
+        ) : (
+          <Text color="gray" size="2">No events recorded yet.</Text>
         )}
       </Box>
     </PageLayout>
