@@ -45,7 +45,6 @@ export const Sidebar = ({ user }: { user?: SessionUser }) => {
   const [isModeTransitionPending, startModeTransition] = useTransition();
   const effectivePendingMode = pendingMode === mode ? null : pendingMode;
   const selectedMode = effectivePendingMode ?? mode;
-  const currentAppColor = environment.appColorScheme.color;
   const isModeLoading = effectivePendingMode !== null || isModeTransitionPending;
 
   const handleModeChange = (value: string) => {
@@ -71,9 +70,8 @@ export const Sidebar = ({ user }: { user?: SessionUser }) => {
       position="sticky"
       top="0"
       style={{
-        backgroundColor: `var(--${currentAppColor}-2)`,
-        borderRight: `1px solid var(--${currentAppColor}-5)`,
-        transition: 'background-color 150ms ease, border-color 150ms ease',
+        backgroundColor: 'var(--color-background)',
+        borderRight: '1px solid var(--gray-a5)',
       }}
     >
       <Box>
@@ -145,9 +143,9 @@ export const Sidebar = ({ user }: { user?: SessionUser }) => {
 
       <ScrollArea>
         <Grid columns="1" gap="2" my="2">
-          {mode === 'compliance' && <ComplianceNav color={currentAppColor} />}
-          {mode === 'clubs' && <ClubsNav color={currentAppColor} />}
-          {mode === 'seats' && <SeatsNav color={currentAppColor} />}
+          {mode === 'compliance' && <ComplianceNav />}
+          {mode === 'clubs' && <ClubsNav />}
+          {mode === 'seats' && <SeatsNav />}
         </Grid>
       </ScrollArea>
 
@@ -156,99 +154,63 @@ export const Sidebar = ({ user }: { user?: SessionUser }) => {
   );
 };
 
-const ComplianceNav = ({ color }: { color: RadixColor }) => (
+const ComplianceNav = () => (
   <>
     <Flex align="center" justify="between" gap="2">
-      <NavItem href="/merchants" color={color} style={{ flexGrow: '2' }}>
+      <NavItem href="/merchants" style={{ flexGrow: '2' }}>
         Merchants
       </NavItem>
       <MerchantsDropdown />
     </Flex>
-    <NavItem href="/products" color={color}>
-      Products
-    </NavItem>
-    <NavItem href="/customers" color={color}>
-      Customers
-    </NavItem>
-    <NavItem href="/orders" color={color}>
-      Orders
-    </NavItem>
-    <NavItem href="/billing-plans" color={color}>
-      Billing Plans
-    </NavItem>
-    <NavItem href="/discounts" color={color}>
-      Discounts
-    </NavItem>
-    <NavItem href="/api-keys" color={color}>
-      API Keys
-    </NavItem>
-    <NavItem href="/fulfillments" color={color}>
-      Fulfillments
-    </NavItem>
-    <NavItem href="/webhook-logs" color={color}>
-      Webhook Logs
-    </NavItem>
-    <NavItem href="/bulk-operations" color={color}>
-      Bulk Operations
-    </NavItem>
+    <NavItem href="/products">Products</NavItem>
+    <NavItem href="/customers">Customers</NavItem>
+    <NavItem href="/orders">Orders</NavItem>
+    <NavItem href="/billing-plans">Billing Plans</NavItem>
+    <NavItem href="/discounts">Discounts</NavItem>
+    <NavItem href="/api-keys">API Keys</NavItem>
+    <NavItem href="/fulfillments">Fulfillments</NavItem>
+    <NavItem href="/webhook-logs">Webhook Logs</NavItem>
+    <NavItem href="/bulk-operations">Bulk Operations</NavItem>
 
     <Separator size="4" />
 
     {/* <Flex align="center" justify="between" gap="2">
-      <NavItem href="/users" color={color} style={{ flexGrow: '2' }}>
+      <NavItem href="/users" style={{ flexGrow: '2' }}>
         Admin
       </NavItem>
     </Flex> */}
-    <AdminDropdown color={color} />
+    <AdminDropdown />
 
     <Flex align="center" justify="between" gap="2">
-      <NavItem href="/users" color={color} style={{ flexGrow: '2' }}>
+      <NavItem href="/users" style={{ flexGrow: '2' }}>
         Admin Users
       </NavItem>
       <UsersDropdown />
     </Flex>
 
-    {/* <NavItem href="/tools" color={color}>
+    {/* <NavItem href="/tools">
       Tools
     </NavItem>
-    <NavItem href="/gdpr" color={color}>
+    <NavItem href="/gdpr">
       GDPR
     </NavItem> */}
   </>
 );
 
-const ClubsNav = ({ color }: { color: RadixColor }) => (
+const ClubsNav = () => (
   <>
-    <NavItem href="/clubs/all" color={color}>
-      All Clubs
-    </NavItem>
-    <NavItem href="/clubs/releases" color={color}>
-      All Releases
-    </NavItem>
-    <NavItem href="/clubs/merchants" color={color}>
-      Merchants
-    </NavItem>
-    <NavItem href="/clubs/members" color={color}>
-      Members
-    </NavItem>
-    <NavItem href="/clubs/orders" color={color}>
-      Orders
-    </NavItem>
+    <NavItem href="/clubs/all">All Clubs</NavItem>
+    <NavItem href="/clubs/releases">All Releases</NavItem>
+    <NavItem href="/clubs/merchants">Merchants</NavItem>
+    <NavItem href="/clubs/members">Members</NavItem>
+    <NavItem href="/clubs/orders">Orders</NavItem>
     <Separator size="4" />
-    <NavItem href="/clubs/billing-plans" color={color}>
-      Billing Plans
-    </NavItem>
-    <NavItem href="/clubs/migrations" color={color}>
-      Migrations
-    </NavItem>
-    <NavItem href="/clubs/gdpr" color={color}>
-      GDPR
-    </NavItem>
-    <NavItem href="/clubs/feature-flags" color={color}>
-      Feature Flags
-    </NavItem>
+    <NavItem href="/clubs/billing-plans">Billing Plans</NavItem>
+    <NavItem href="/clubs/migrations">Migrations</NavItem>
+    <NavItem href="/clubs/gdpr">GDPR</NavItem>
+    <NavItem href="/clubs/feature-flags">Feature Flags</NavItem>
     <Flex align="center" justify="between" gap="2">
-      <NavItem href="/clubs/logs" color={color} style={{ flexGrow: '2' }}>
+      <NavItem href="/clubs/logs" style={{ flexGrow: '2' }}>
         Logs
       </NavItem>
       <LogsDropdown />
@@ -256,11 +218,9 @@ const ClubsNav = ({ color }: { color: RadixColor }) => (
   </>
 );
 
-const SeatsNav = ({ color }: { color: RadixColor }) => (
+const SeatsNav = () => (
   <>
-    <NavItem href="/seats" color={color}>
-      Coming Soon
-    </NavItem>
+    <NavItem href="/seats">Coming Soon</NavItem>
   </>
 );
 
@@ -270,7 +230,7 @@ const MerchantsDropdown = () => {
   return (
     <DropdownMenu.Root open={open} onOpenChange={setOpen}>
       <DropdownMenu.Trigger>
-        <Button variant="soft" color="gray">
+        <Button variant="soft" color="gray" className="sidebar-nav-item">
           <DropdownMenu.TriggerIcon />
         </Button>
       </DropdownMenu.Trigger>
@@ -303,7 +263,7 @@ const LogsDropdown = () => {
   return (
     <DropdownMenu.Root open={open} onOpenChange={setOpen}>
       <DropdownMenu.Trigger>
-        <Button variant="soft" color="gray">
+        <Button variant="soft" color="gray" className="sidebar-nav-item">
           <DropdownMenu.TriggerIcon />
         </Button>
       </DropdownMenu.Trigger>
@@ -326,7 +286,7 @@ const UsersDropdown = () => {
   return (
     <DropdownMenu.Root open={open} onOpenChange={setOpen}>
       <DropdownMenu.Trigger>
-        <Button variant="soft" color="gray">
+        <Button variant="soft" color="gray" className="sidebar-nav-item">
           <DropdownMenu.TriggerIcon />
         </Button>
       </DropdownMenu.Trigger>
@@ -363,37 +323,29 @@ const UsersDropdown = () => {
   );
 };
 
-const AdminDropdown = ({ color }: { color: RadixColor }) => {
+const AdminDropdown = () => {
   const [open, setOpen] = useState(false);
 
   return (
     <DropdownMenu.Root open={open} onOpenChange={setOpen}>
       <DropdownMenu.Trigger>
-        <Button variant="soft" color={color ?? 'gray'}>
+        <Button variant="soft" color="gray" className="sidebar-nav-item">
           Admin <DropdownMenu.TriggerIcon />
         </Button>
       </DropdownMenu.Trigger>
 
       <DropdownMenu.Content>
         <DropdownMenu.Item asChild onSelect={() => setOpen(false)}>
-          <Link href="/tools" color={color}>
-            Tools
-          </Link>
+          <Link href="/tools">Tools</Link>
         </DropdownMenu.Item>
         <DropdownMenu.Item asChild onSelect={() => setOpen(false)}>
-          <Link href="/gdpr" color={color}>
-            GDPR
-          </Link>
+          <Link href="/gdpr">GDPR</Link>
         </DropdownMenu.Item>
         <DropdownMenu.Item asChild onSelect={() => setOpen(false)}>
-          <Link href="/issues" color={color}>
-            App Issues
-          </Link>
+          <Link href="/issues">App Issues</Link>
         </DropdownMenu.Item>
         <DropdownMenu.Item asChild onSelect={() => setOpen(false)}>
-          <Link href="/enums" color={color}>
-            Enums &amp; Lists
-          </Link>
+          <Link href="/enums">Enums &amp; Lists</Link>
         </DropdownMenu.Item>
       </DropdownMenu.Content>
     </DropdownMenu.Root>
@@ -405,7 +357,7 @@ export const NavItem = ({
   children,
   icon,
   active: defaultActive,
-  color = 'ruby',
+  color,
   style,
 }: {
   href: string;
@@ -431,6 +383,8 @@ export const NavItem = ({
       variant="soft"
       size="2"
       color={active || loading ? color : 'gray'}
+      className="sidebar-nav-item"
+      data-active={active || undefined}
       style={style}
       onClick={() => setLoading(true)}
     >

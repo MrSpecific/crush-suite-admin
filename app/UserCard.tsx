@@ -8,23 +8,23 @@ export const UserCard = ({ givenName, familyName, email }: SessionUser) => {
   const fallback = givenName ? givenName[0] : email ? email[0] : 'U';
 
   return (
-    <Box>
-      <Grid display="inline-grid" gap="2" columns="auto auto" width="auto">
-        <Box display="inline-block">
-          <Avatar fallback={fallback} />
-        </Box>
-        <Grid>
-          <Text size="2" weight="bold">
-            {givenName}
+    <Box px="1" pb="2">
+      <Grid gap="3" columns="auto 1fr" align="center">
+        <Avatar fallback={fallback} size="2" radius="full" color="amber" variant="soft" />
+        <Grid minWidth="0">
+          <Text size="2" weight="medium" truncate>
+            {[givenName, familyName].filter(Boolean).join(' ') || email}
           </Text>
-
-          <Text size="1">
-            <Button type="button" onClick={() => signOut()} variant="ghost">
-              Sign Out
-            </Button>
-          </Text>
+          {email && (
+            <Text size="1" color="gray" truncate>
+              {email}
+            </Text>
+          )}
         </Grid>
       </Grid>
+      <Button type="button" onClick={() => signOut()} variant="ghost" color="gray" size="1" mt="3">
+        Sign out
+      </Button>
     </Box>
   );
 };

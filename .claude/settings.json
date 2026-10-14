@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir -p /private/tmp/claude-502/-Users-willchristenson-git-crushsuite-crush-suite-admin/4794357e-8f2c-4d6f-8725-392d8e9d1155/scratchpad/crm)",
+      "Bash(curl -sL https://crushsuite-crm.vercel.app/ -o index.html)"
+    ]
+  }
+}

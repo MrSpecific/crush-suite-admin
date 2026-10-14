@@ -1,1 +1,110 @@
 @import "modern-css-reset";
+
+/*
+ * Visual language shared with the CrushSuite CRM (crm-dashboard/app/globals.css): cream page, white cards with warm
+ * hairlines, warm grey text and an oxblood brand accent. Radix palettes are swapped the documented way, by redefining
+ * the scale the Theme points at: `grayColor="sand"` and `accentColor="ruby"` in app/layout.tsx. These rules load after
+ * Radix's stylesheet with the same selectors, so they also win over its display-p3 variants.
+ *
+ * Alpha steps composite to the solid step over white, which is how Radix builds its own.
+ */
+:root,
+.light,
+.light-theme {
+  /* Warm grey: 2 hoverband, 3 line-soft, 5 line, 6 baseline, 7 neutral, 9 faint, 11 muted, 12 ink */
+  --sand-1: #fdfbf6;
+  --sand-2: #f7f3ea;
+  --sand-3: #f2ede0;
+  --sand-4: #ece7dd;
+  --sand-5: #e5e0d5;
+  --sand-6: #d9d2c3;
+  --sand-7: #cfc8b8;
+  --sand-8: #b8afa2;
+  --sand-9: #8c8276;
+  --sand-10: #7d7468;
+  --sand-11: #6b6258;
+  --sand-12: #1a1a1a;
+  --sand-a1: #c68e0009;
+  --sand-a2: #9e6d0015;
+  --sand-a3: #946b001f;
+  --sand-a4: #704b0022;
+  --sand-a5: #6143002a;
+  --sand-a6: #5e40003c;
+  --sand-a7: #53390047;
+  --sand-a8: #3c24005d;
+  --sand-a9: #29160089;
+  --sand-a10: #23140097;
+  --sand-a11: #1d0f00a7;
+  --sand-a12: #000000e5;
+
+  /* Brand oxblood: 4 blush, 6 blush-line, 9 and 11 brand, 10 brand-deep, 12 plum */
+  --ruby-1: #fefaf9;
+  --ruby-2: #fdf6f4;
+  --ruby-3: #fbe9e7;
+  --ruby-4: #f5dad8;
+  --ruby-5: #efcbcc;
+  --ruby-6: #e8b9b6;
+  --ruby-7: #e0a3a7;
+  --ruby-8: #d9908c;
+  --ruby-9: #8a2520;
+  --ruby-10: #6b1f2e;
+  --ruby-11: #8a2520;
+  --ruby-12: #4a1520;
+  --ruby-a1: #d42a0006;
+  --ruby-a2: #d12e000b;
+  --ruby-a3: #d4150018;
+  --ruby-a4: #be0d0027;
+  --ruby-a5: #b1000534;
+  --ruby-a6: #af0a0049;
+  --ruby-a7: #a9000b5c;
+  --ruby-a8: #ab090073;
+  --ruby-a9: #790600df;
+  --ruby-a10: #570011e0;
+  --ruby-a11: #790600df;
+  --ruby-a12: #3a000cea;
+  --ruby-contrast: #ffffff;
+  --ruby-surface: #fdf6f4cc;
+  --ruby-indicator: var(--ruby-9);
+  --ruby-track: var(--ruby-9);
+}
+
+.radix-themes {
+  --default-font-family: var(--font-jakarta), system-ui, sans-serif;
+  --heading-font-family: var(--font-jakarta), system-ui, sans-serif;
+  --heading-letter-spacing: -0.01em;
+
+  /* Cream page, solid white panels: cards read as white tiles on cream rather than translucent glass. */
+  --color-background: #faf6ee;
+  --color-panel-solid: #ffffff;
+  --color-surface: #ffffff;
+
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Tables: quiet header and the lighter line-soft row divider, matching the CRM's lists. */
+.rt-TableRootTable {
+  --table-row-box-shadow: inset 0 -1px var(--gray-a3);
+}
+
+.rt-TableHeader {
+  --table-row-background-color: transparent;
+  --table-row-box-shadow: inset 0 -1px var(--gray-a5);
+}
+
+.rt-TableColumnHeaderCell {
+  font-weight: 600;
+  color: var(--gray-11);
+}
+
+/* Sidebar nav: links sit flat on the cream until hovered or current, rather than reading as a stack of buttons. */
+.sidebar-nav-item {
+  justify-content: flex-start;
+}
+
+.sidebar-nav-item:where([data-accent-color="gray"]):not(:hover) {
+  background-color: transparent;
+}
+
+.sidebar-nav-item[data-active] {
+  font-weight: 600;
+}
