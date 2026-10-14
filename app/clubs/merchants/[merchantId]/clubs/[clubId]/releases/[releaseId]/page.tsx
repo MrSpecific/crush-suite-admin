@@ -855,9 +855,14 @@ export default async function Page(props: {
             Actions={MemberWithoutOrderActions}
           />
           {membersWithoutOrderCount > previewTake && (
-            <Text size="1" color="gray" mt="2" as="p">
-              Showing first {previewTake} of {membersWithoutOrderCount} members.
-            </Text>
+            <Flex justify="between" align="center" gap="3" mt="2">
+              <Text size="1" color="gray" as="p">
+                Showing first {previewTake} of {membersWithoutOrderCount} members.
+              </Text>
+              <ButtonLink href={`${basePath}/not-customized`} variant="soft">
+                View all
+              </ButtonLink>
+            </Flex>
           )}
         </Box>
       )}
