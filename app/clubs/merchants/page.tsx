@@ -39,7 +39,7 @@ export default async function Page(props: { searchParams: Promise<PageSearchPara
   const headers = [
     { id: 'platformShopName', title: 'Name', href: merchantHref },
     { id: 'shop', title: 'Shop', href: merchantHref },
-    { id: 'platformEmail', title: 'Email' },
+    // { id: 'platformEmail', title: 'Email' },
     {
       id: 'status',
       title: 'Status',
