@@ -1,9 +1,10 @@
 'use client';
-import { useId, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { Box, Button, Flex, IconButton, Select, Text, TextField } from '@radix-ui/themes';
+import { Box, Button, Flex, IconButton, Kbd, Select, Text, TextField } from '@radix-ui/themes';
 import * as Form from '@radix-ui/react-form';
 import { Cross2Icon, MagnifyingGlassIcon } from '@radix-ui/react-icons';
+import { useSearchShortcut } from '@/lib/hooks/useSearchShortcut';
 
 const allFilterValue = '__all__';
 
@@ -34,11 +35,12 @@ export const DataFilter = ({
   const currentSearchParams = useSearchParams();
   // When submitting to another page, don't carry over this page's params (e.g.
   // a products search on the merchant page shouldn't prefill an orders search).
-  const searchParams =
-    pathname === currentPathname ? currentSearchParams : new URLSearchParams();
+  const searchParams = pathname === currentPathname ? currentSearchParams : new URLSearchParams();
   const params = new URLSearchParams(searchParams.toString());
   const currentSearch = params.get('search') || '';
   const searchInputId = useId();
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const searchShortcutProps = useSearchShortcut(searchInputRef);
   const [searchValue, setSearchValue] = useState(currentSearch);
   const [prevSearch, setPrevSearch] = useState(currentSearch);
 
@@ -86,6 +88,8 @@ export const DataFilter = ({
         </Text>
         <TextField.Root
           id={searchInputId}
+          ref={searchInputRef}
+          {...searchShortcutProps}
           radius="large"
           name="textInput"
           value={searchValue}
@@ -94,6 +98,11 @@ export const DataFilter = ({
           <TextField.Slot>
             <MagnifyingGlassIcon height="16" width="16" />
           </TextField.Slot>
+          {!searchValue && (
+            <TextField.Slot>
+              <Kbd size="1">⌘F</Kbd>
+            </TextField.Slot>
+          )}
           {searchValue && (
             <TextField.Slot>
               <IconButton

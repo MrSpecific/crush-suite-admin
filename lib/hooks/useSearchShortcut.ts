@@ -23,9 +23,9 @@ export const useSearchShortcut = (ref: RefObject<HTMLInputElement | null>) => {
       }
 
       // Skip inputs hidden behind an open dialog (Radix sets aria-hidden on everything outside it).
-      const inputs = Array.from(document.querySelectorAll<HTMLInputElement>(`[${attribute}]`)).filter(
-        (input) => !input.closest('[aria-hidden="true"]'),
-      );
+      const inputs = Array.from(
+        document.querySelectorAll<HTMLInputElement>(`[${attribute}]`)
+      ).filter((input) => !input.closest('[aria-hidden="true"]'));
       const current = inputs.indexOf(document.activeElement as HTMLInputElement);
       const target = inputs[current + 1];
 
