@@ -248,6 +248,8 @@ export type ShopifyVariantSummary = {
   legacyResourceId: string;
   title: string;
   product: { id: string; legacyResourceId: string; title: string };
+  // Null when the variant needs no shipping (or Shopify has not assigned one)
+  deliveryProfile: { id: string; name: string } | null;
 };
 
 type ShopifyVariantsQueryData = {
@@ -265,6 +267,10 @@ const SHOPIFY_VARIANTS_QUERY = /* GraphQL */ `
           id
           legacyResourceId
           title
+        }
+        deliveryProfile {
+          id
+          name
         }
       }
     }
@@ -311,6 +317,306 @@ export function getShopifyAdminOrderUrl(shop: string, platformOrderId: string) {
   return `https://${normalizeShopifyShopDomain(shop)}/admin/orders/${platformOrderId}`;
 }
 
+export function getShopifyAdminLocationUrl(shop: string, platformLocationId: string) {
+  const id = platformLocationId.split('/').pop();
+  return `https://${normalizeShopifyShopDomain(shop)}/admin/settings/locations/${id}`;
+}
+
+export function getShopifyAdminDeliveryProfileUrl(shop: string, deliveryProfileId: string) {
+  const id = deliveryProfileId.split('/').pop();
+  return `https://${normalizeShopifyShopDomain(shop)}/admin/settings/shipping/profiles/${id}`;
+}
+
+const toShopifyGid = (type: string, id: string) =>
+  id.startsWith('gid://') ? id : `gid://shopify/${type}/${id}`;
+
+// Locations
+
+export type ShopifyLocationDetail = {
+  id: string;
+  legacyResourceId: string;
+  name: string;
+  isActive: boolean;
+  // The shop's default location for inventory
+  shipsInventory: boolean;
+  fulfillsOnlineOrders: boolean;
+  isFulfillmentService: boolean;
+  address: {
+    address1: string | null;
+    address2: string | null;
+    city: string | null;
+    provinceCode: string | null;
+    zip: string | null;
+    countryCode: string | null;
+    phone: string | null;
+  };
+  localPickupSettingsV2: { pickupTime: string | null; instructions: string | null } | null;
+};
+
+const SHOPIFY_LOCATIONS_QUERY = /* GraphQL */ `
+  query CrushSuiteAdminLocations($ids: [ID!]!) {
+    nodes(ids: $ids) {
+      ... on Location {
+        id
+        legacyResourceId
+        name
+        isActive
+        shipsInventory
+        fulfillsOnlineOrders
+        isFulfillmentService
+        address {
+          address1
+          address2
+          city
+          provinceCode
+          zip
+          countryCode
+          phone
+        }
+        localPickupSettingsV2 {
+          pickupTime
+          instructions
+        }
+      }
+    }
+  }
+`;
+
+export async function getShopifyLocationsByIds({
+  shop,
+  accessToken,
+  platformLocationIds,
+}: {
+  shop: string;
+  accessToken: string;
+  platformLocationIds: string[];
+}) {
+  if (platformLocationIds.length === 0) return [];
+
+  const data = await shopifyAdminGraphql<
+    { nodes: Array<ShopifyLocationDetail | Record<string, never> | null> },
+    { ids: string[] }
+  >({
+    shop,
+    accessToken,
+    query: SHOPIFY_LOCATIONS_QUERY,
+    variables: { ids: [...new Set(platformLocationIds.map((id) => toShopifyGid('Location', id)))] },
+  });
+
+  return data.nodes.filter((node): node is ShopifyLocationDetail => !!node && 'id' in node);
+}
+
+// Inventory levels
+
+export type ShopifyInventoryQuantities = {
+  available: number;
+  reserved: number;
+  committed: number;
+  on_hand: number;
+};
+
+export type ShopifyInventoryItemLevel = {
+  id: string;
+  legacyResourceId: string;
+  // False when the merchant does not count stock for this item at all
+  tracked: boolean;
+  // Null when the item is not stocked at the location
+  quantities: ShopifyInventoryQuantities | null;
+};
+
+type ShopifyInventoryLevelsQueryData = {
+  nodes: Array<
+    | {
+        id: string;
+        legacyResourceId: string;
+        tracked: boolean;
+        inventoryLevel: { quantities: { name: string; quantity: number }[] } | null;
+      }
+    | Record<string, never>
+    | null
+  >;
+};
+
+const SHOPIFY_INVENTORY_LEVELS_QUERY = /* GraphQL */ `
+  query CrushSuiteAdminInventoryLevels($ids: [ID!]!, $locationId: ID!) {
+    nodes(ids: $ids) {
+      ... on InventoryItem {
+        id
+        legacyResourceId
+        tracked
+        inventoryLevel(locationId: $locationId) {
+          quantities(names: ["available", "reserved", "committed", "on_hand"]) {
+            name
+            quantity
+          }
+        }
+      }
+    }
+  }
+`;
+
+export async function getShopifyInventoryLevelsAtLocation({
+  shop,
+  accessToken,
+  platformLocationId,
+  platformInventoryItemIds,
+}: {
+  shop: string;
+  accessToken: string;
+  platformLocationId: string;
+  platformInventoryItemIds: string[];
+}): Promise<ShopifyInventoryItemLevel[]> {
+  if (platformInventoryItemIds.length === 0) return [];
+
+  const data = await shopifyAdminGraphql<
+    ShopifyInventoryLevelsQueryData,
+    { ids: string[]; locationId: string }
+  >({
+    shop,
+    accessToken,
+    query: SHOPIFY_INVENTORY_LEVELS_QUERY,
+    variables: {
+      ids: [...new Set(platformInventoryItemIds.map((id) => toShopifyGid('InventoryItem', id)))],
+      locationId: toShopifyGid('Location', platformLocationId),
+    },
+  });
+
+  return data.nodes
+    .filter((node): node is NonNullable<typeof node> & { id: string } => !!node && 'id' in node)
+    .map(({ inventoryLevel, ...item }) => ({
+      id: item.id,
+      legacyResourceId: item.legacyResourceId,
+      tracked: item.tracked,
+      quantities: inventoryLevel
+        ? (Object.fromEntries(
+            inventoryLevel.quantities.map((q) => [q.name, q.quantity])
+          ) as ShopifyInventoryQuantities)
+        : null,
+    }));
+}
+
+// Delivery profiles
+
+export type ShopifyDeliveryZone = {
+  name: string;
+  countries: {
+    code: { countryCode: string | null; restOfWorld: boolean };
+    provinces: { code: string }[];
+  }[];
+  methods: { name: string; active: boolean }[];
+};
+
+export type ShopifyDeliveryProfileDetail = {
+  id: string;
+  name: string;
+  default: boolean;
+  // Locations the profile ships from, across all its location groups
+  locations: { legacyResourceId: string; name: string }[];
+  zones: ShopifyDeliveryZone[];
+};
+
+type ShopifyDeliveryProfileQueryData = {
+  deliveryProfile: {
+    id: string;
+    name: string;
+    default: boolean;
+    profileLocationGroups: {
+      locationGroup: { locations: { nodes: { legacyResourceId: string; name: string }[] } };
+      locationGroupZones: {
+        nodes: {
+          zone: { name: string; countries: ShopifyDeliveryZone['countries'] };
+          methodDefinitions: { nodes: { name: string; active: boolean }[] };
+        }[];
+      };
+    }[];
+  } | null;
+};
+
+// One profile at a time, first page of each connection: profiles, zones per group and methods per
+// zone are each a handful in practice. Walking every profile in the shop is expensive, so callers
+// pass only the profiles they care about (see the Clubs app's shipping-rate-identity.md).
+const SHOPIFY_DELIVERY_PROFILE_QUERY = /* GraphQL */ `
+  query CrushSuiteAdminDeliveryProfile($id: ID!) {
+    deliveryProfile(id: $id) {
+      id
+      name
+      default
+      profileLocationGroups {
+        locationGroup {
+          locations(first: 10) {
+            nodes {
+              legacyResourceId
+              name
+            }
+          }
+        }
+        locationGroupZones(first: 20) {
+          nodes {
+            zone {
+              name
+              countries {
+                code {
+                  countryCode
+                  restOfWorld
+                }
+                provinces {
+                  code
+                }
+              }
+            }
+            methodDefinitions(first: 10) {
+              nodes {
+                name
+                active
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+`;
+
+export async function getShopifyDeliveryProfile({
+  shop,
+  accessToken,
+  deliveryProfileId,
+}: {
+  shop: string;
+  accessToken: string;
+  deliveryProfileId: string;
+}): Promise<ShopifyDeliveryProfileDetail | null> {
+  const data = await shopifyAdminGraphql<ShopifyDeliveryProfileQueryData, { id: string }>({
+    shop,
+    accessToken,
+    query: SHOPIFY_DELIVERY_PROFILE_QUERY,
+    variables: { id: toShopifyGid('DeliveryProfile', deliveryProfileId) },
+  });
+
+  const profile = data.deliveryProfile;
+  if (!profile) return null;
+
+  const locations = new Map(
+    profile.profileLocationGroups
+      .flatMap((group) => group.locationGroup.locations.nodes)
+      .map((location) => [location.legacyResourceId, location])
+  );
+
+  return {
+    id: profile.id,
+    name: profile.name,
+    default: profile.default,
+    locations: [...locations.values()],
+    zones: profile.profileLocationGroups.flatMap((group) =>
+      group.locationGroupZones.nodes.map(({ zone, methodDefinitions }) => ({
+        name: zone.name,
+        countries: zone.countries,
+        methods: methodDefinitions.nodes,
+      }))
+    ),
+  };
+}
+
 export type ShopifySubscriptionBillingAttempt = {
   id: string;
   createdAt: string;
@@ -333,7 +639,11 @@ export type ShopifySubscriptionContract = {
   currencyCode: string;
   deliveryPrice: Money | null;
   deliveryMethod: { __typename: string } | null;
-  customerPaymentMethod: { id: string; revokedAt: string | null; revokedReason: string | null } | null;
+  customerPaymentMethod: {
+    id: string;
+    revokedAt: string | null;
+    revokedReason: string | null;
+  } | null;
   billingAttempts: { nodes: ShopifySubscriptionBillingAttempt[] };
 };
 
